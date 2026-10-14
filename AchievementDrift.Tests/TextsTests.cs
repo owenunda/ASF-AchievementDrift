@@ -8,11 +8,14 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace AchievementDrift.Tests;
 
 [TestClass]
-public sealed class TextsTests {
+public sealed partial class TextsTests {
 	private static readonly CultureInfo English = new("en-US");
 	private static readonly CultureInfo Spanish = new("es-ES");
 
-	private static string[] Placeholders(string text) => Regex.Matches(text, @"\{(\d+)(:[^}]*)?\}").Select(static match => match.Groups[1].Value).Distinct().Order().ToArray();
+	private static string[] Placeholders(string text) => PlaceholderRegex().Matches(text).Select(static match => match.Groups[1].Value).Distinct().Order().ToArray();
+
+	[GeneratedRegex(@"\{(\d+)(:[^}]*)?\}")]
+	private static partial Regex PlaceholderRegex();
 
 	[TestMethod]
 	public void BothLanguagesDefineEveryKey() {

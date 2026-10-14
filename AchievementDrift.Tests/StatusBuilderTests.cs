@@ -105,10 +105,8 @@ public sealed class StatusBuilderTests {
 		foreach (string text in new[] { withGames, empty }) {
 			string lastLine = text.Split('\n')[^1];
 
-			StringAssert.Contains(lastLine, StatusBuilder.PanelPath);
+			StringAssert.Contains(lastLine, "/drift/");
 		}
-
-		Assert.AreEqual("/drift/", StatusBuilder.PanelPath);
 	}
 
 	[TestMethod]
