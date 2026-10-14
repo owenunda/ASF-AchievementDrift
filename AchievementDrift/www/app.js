@@ -2,6 +2,12 @@
 
 const PASSWORD_KEY = "achievementdrift.ipcPassword";
 const BOT_KEY = "achievementdrift.bot";
+const MAX_APP_ID = 4294967295;
+
+// ASF bloquea la IP tras 5 contraseñas incorrectas: como mucho un aviso de contraseña a la vez,
+// un solo reintento por petición y sin sondeo automático mientras no estemos autorizados
+let passwordPrompt = null;
+let unauthorized = false;
 
 function getPassword() {
 	try {
@@ -19,7 +25,38 @@ function setPassword(value) {
 	}
 }
 
-async function api(path, options = {}) {
+function clearPassword() {
+	try {
+		localStorage.removeItem(PASSWORD_KEY);
+	} catch {
+		// Ignorado
+	}
+}
+
+// Todas las peticiones que reciban 401 a la vez comparten el mismo aviso
+function askPassword() {
+	if (!passwordPrompt) {
+		passwordPrompt = Promise.resolve()
+			.then(() => {
+				const entered = prompt("Contraseña IPC de ASF (IPCPassword):");
+
+				if (!entered) {
+					return false;
+				}
+
+				setPassword(entered);
+
+				return true;
+			})
+			.finally(() => {
+				passwordPrompt = null;
+			});
+	}
+
+	return passwordPrompt;
+}
+
+async function api(path, options = {}, isRetry = false) {
 	const headers = { "Content-Type": "application/json" };
 	const password = getPassword();
 
@@ -29,19 +66,46 @@ async function api(path, options = {}) {
 
 	const response = await fetch(`../Api/Drift/${path}`, { ...options, headers });
 
-	if (response.status === 401 || response.status === 403) {
-		const entered = prompt("Contraseña IPC de ASF (IPCPassword):");
+	if (response.status === 403) {
+		// No se pide contraseña: más intentos solo alargarían el bloqueo
+		unauthorized = true;
 
-		if (entered !== null) {
-			setPassword(entered);
-
-			return api(path, options);
-		}
-
-		throw new Error("No autorizado.");
+		throw new Error("ASF ha bloqueado temporalmente tu IP o la IPC no permite acceso remoto (403). Espera y recarga.");
 	}
 
-	const body = await response.json();
+	if (response.status === 401) {
+		if (isRetry) {
+			unauthorized = true;
+			clearPassword();
+
+			throw new Error("La contraseña IPC no es correcta. Revisa IPCPassword y vuelve a intentarlo (tras 5 fallos ASF bloquea tu IP durante un rato).");
+		}
+
+		// Otra petición ya pidió una contraseña nueva mientras esta estaba en curso: reintentamos con ella sin preguntar
+		if (getPassword() !== password && getPassword()) {
+			return api(path, options, true);
+		}
+
+		clearPassword();
+
+		if (!await askPassword()) {
+			unauthorized = true;
+
+			throw new Error("No autorizado: hace falta la contraseña IPC de ASF (IPCPassword).");
+		}
+
+		return api(path, options, true);
+	}
+
+	unauthorized = false;
+
+	let body;
+
+	try {
+		body = await response.json();
+	} catch {
+		throw new Error(`Error ${response.status}`);
+	}
 
 	if (!body.Success) {
 		throw new Error(body.Message || `Error ${response.status}`);
@@ -101,8 +165,21 @@ async function loadStatus() {
 	}).join("");
 }
 
-function parseIds(text) {
-	return text.split(",").map((value) => value.trim()).filter(Boolean).map(Number).filter((value) => Number.isInteger(value) && value > 0);
+// Rechaza (no descarta en silencio) lo que no sea un appid válido: un appid mal escrito en la Blacklist sería un riesgo
+function parseIds(text, listName) {
+	const ids = [];
+
+	for (const token of text.split(",").map((value) => value.trim()).filter(Boolean)) {
+		const value = /^\d+$/.test(token) ? Number(token) : NaN;
+
+		if (!Number.isSafeInteger(value) || value < 1 || value > MAX_APP_ID) {
+			throw new Error(`Appid inválido en ${listName}: ${token}`);
+		}
+
+		ids.push(value);
+	}
+
+	return ids;
 }
 
 async function loadConfig() {
@@ -137,12 +214,15 @@ function readForm() {
 		MaxActiveGames: Number(form.elements.MaxActiveGames.value),
 		ExcludeVac: form.elements.ExcludeVac.checked,
 		ExcludeOnline: form.elements.ExcludeOnline.checked,
-		Blacklist: parseIds(form.elements.Blacklist.value),
-		Allowlist: parseIds(form.elements.Allowlist.value)
+		Blacklist: parseIds(form.elements.Blacklist.value, "Blacklist"),
+		Allowlist: parseIds(form.elements.Allowlist.value, "Allowlist")
 	};
 }
 
-async function saveConfig(config) {
+// readForm puede lanzar (appid inválido): dentro de una función async el error llega al .catch y no se envía nada
+async function saveConfig(overrides = {}) {
+	const config = { ...readForm(), ...overrides };
+
 	await api(`${encodeURIComponent(currentBot())}/Config`, { method: "PUT", body: JSON.stringify(config) });
 	showMessage("Configuración guardada.");
 	await loadConfig();
@@ -160,7 +240,7 @@ function suggestTimeZone(configured) {
 
 	box.innerHTML = `Tu navegador está en <b>${escapeHtml(detected)}</b>. <button type="button">Usar esta zona horaria</button>`;
 	box.hidden = false;
-	box.querySelector("button").addEventListener("click", () => saveConfig({ ...readForm(), TimeZone: detected }).catch((error) => showMessage(error.message)));
+	box.querySelector("button").addEventListener("click", () => saveConfig({ TimeZone: detected }).catch((error) => showMessage(error.message)));
 }
 
 function selectTab(name) {
@@ -176,7 +256,9 @@ function selectTab(name) {
 async function refresh() {
 	try {
 		showMessage("");
-		await Promise.all([loadStatus(), loadConfig()]);
+		// En secuencia: si falta la contraseña, solo la primera petición la pide
+		await loadStatus();
+		await loadConfig();
 	} catch (error) {
 		showMessage(error.message);
 	}
@@ -189,7 +271,7 @@ async function init() {
 
 	document.getElementById("config-form").addEventListener("submit", (event) => {
 		event.preventDefault();
-		saveConfig(readForm()).catch((error) => showMessage(error.message));
+		saveConfig().catch((error) => showMessage(error.message));
 	});
 
 	const select = document.getElementById("bot");
@@ -225,7 +307,12 @@ async function init() {
 	}
 
 	await refresh();
-	setInterval(() => loadStatus().catch((error) => showMessage(error.message)), 60000);
+	setInterval(() => {
+		// En pausa mientras no estemos autorizados; se reanuda tras cualquier petición correcta
+		if (!unauthorized) {
+			loadStatus().catch((error) => showMessage(error.message));
+		}
+	}, 60000);
 }
 
 init();
