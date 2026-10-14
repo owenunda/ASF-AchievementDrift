@@ -1,0 +1,28 @@
+<Project>
+	<Import Project="ArchiSteamFarm/Directory.Build.props" />
+
+	<PropertyGroup>
+		<PluginName>AchievementDrift</PluginName>
+		<Version>1.0.0.0</Version>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<ApplicationIcon />
+		<Authors>owenunda</Authors>
+		<Company>$(Authors)</Company>
+		<Copyright>Copyright © $([System.DateTime]::UtcNow.Year) $(Company)</Copyright>
+		<Description>Plugin para ArchiSteamFarm que desbloquea logros de forma gradual y realista mientras farmeas horas.</Description>
+		<PackageIcon />
+		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+		<PackageProjectUrl>https://github.com/owenunda/ASF-AchievementDrift</PackageProjectUrl>
+		<PackageReleaseNotes>$(PackageProjectUrl)/releases</PackageReleaseNotes>
+		<RepositoryUrl>$(PackageProjectUrl).git</RepositoryUrl>
+	</PropertyGroup>
+
+	<!-- Reset ASF signing settings, as we'll use our own logic -->
+	<PropertyGroup>
+		<AssemblyOriginatorKeyFile />
+		<PublicSign>false</PublicSign>
+		<SignAssembly>false</SignAssembly>
+	</PropertyGroup>
+</Project>

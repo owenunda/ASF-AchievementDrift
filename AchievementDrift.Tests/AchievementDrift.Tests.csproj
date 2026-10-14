@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Library</OutputType>
+		<AnalysisMode>AllDisabledByDefault</AnalysisMode>
+		<IsPackable>false</IsPackable>
+		<RootNamespace>AchievementDrift.Tests</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MSTest" />
+		<PackageReference Include="SteamKit2" />
+	</ItemGroup>
+
+	<!-- Compilamos directamente la lógica pura: así los tests no necesitan ASF en ejecución -->
+	<ItemGroup>
+		<Compile Include="..\AchievementDrift\Core\**\*.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+		<Compile Include="..\AchievementDrift\Steam\SchemaParser.cs" Link="Steam\SchemaParser.cs" />
+	</ItemGroup>
+</Project>
