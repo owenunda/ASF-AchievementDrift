@@ -53,12 +53,11 @@ Con los valores por defecto de ASF (`PluginsUpdateMode` = `Whitelist` y `Plugins
 
 ```json
 {
-  "PluginsUpdateMode": "Whitelist",
   "PluginsUpdateList": ["AchievementDrift"]
 }
 ```
 
-Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases marcados como estables/«latest»; con `PreRelease` también toma las versiones de prueba.
+Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases marcados como estables/«latest»; con `PreRelease` también toma las versiones de prueba. `UpdateChannel` también se define en `config/ASF.json`. En ese archivo los valores de enumeración son numéricos: `PluginsUpdateMode`: `0` = `Whitelist`, `1` = `Blacklist`; `UpdateChannel`: `1` = `Stable`, `2` = `PreRelease`.
 
 ## Primeros pasos
 
