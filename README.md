@@ -47,6 +47,19 @@ Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progre
 
 **Docker:** copia o monta la carpeta extraída en `/app/plugins/AchievementDrift`. Para que la configuración y el progreso sobrevivan a recrear el contenedor, asegúrate de que `/app/config` también es persistente.
 
+## Actualizaciones automáticas
+
+Con los valores por defecto de ASF (`PluginsUpdateMode` = `Whitelist` y `PluginsUpdateList` vacía) **ningún plugin se actualiza solo**. Para activarlo en este plugin, añade `AchievementDrift` a `PluginsUpdateList` en `config/ASF.json` (manteniendo `Whitelist`) y reinicia ASF:
+
+```json
+{
+  "PluginsUpdateMode": "Whitelist",
+  "PluginsUpdateList": ["AchievementDrift"]
+}
+```
+
+Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases marcados como estables/«latest»; con `PreRelease` también toma las versiones de prueba.
+
 ## Primeros pasos
 
 1. Abre `https://<tu-asf>/drift/` (**con la barra final**).
