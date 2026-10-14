@@ -35,7 +35,7 @@ gradual, aleatoria y con apariencia realista.
 ## 2. Arquitectura
 
 Un proyecto `AchievementDrift` basado en `JustArchiNET/ASF-PluginTemplate` (ASF como submódulo git,
-central package management) y un proyecto de tests `AchievementDrift.Tests` (xUnit).
+central package management) y un proyecto de tests `AchievementDrift.Tests` (MSTest, la versión que ASF ya fija en su central package management).
 
 | Unidad | Responsabilidad | Depende de |
 |---|---|---|
@@ -46,8 +46,8 @@ central package management) y un proyecto de tests `AchievementDrift.Tests` (xUn
 | `PlanGenerator` | **Lógica pura.** Recibe logros (nombre, % global) + configuración + `Random`, devuelve un `Plan`. | nada |
 | `ActiveWindow` | **Lógica pura.** Dado un instante UTC, una franja `HH:mm-HH:mm` y una zona IANA, dice si está dentro del horario y cuántos minutos tiene la franja por día. Soporta franjas que cruzan medianoche. | nada |
 | `Scheduler` | Timer de 1 minuto. Para cada bot conectado y cada juego en reproducción: suma minutos activos y desbloquea lo que toca. | `ISteamStatsClient`, `IClock`, `PlanStore`, `ConfigStore` |
-| `PlanStore` | Persiste planes y progreso en `plugins/AchievementDrift/data/<bot>.json`. | sistema de archivos |
-| `ConfigStore` | Persiste configuración en `plugins/AchievementDrift/config/<bot>.json`. Única fuente de configuración. Cambios aplicados en caliente. | sistema de archivos |
+| `PlanStore` | Persiste planes y progreso en `config/AchievementDrift/<bot>.state.json`. | sistema de archivos |
+| `ConfigStore` | Persiste configuración en `config/AchievementDrift/<bot>.config.json`. Única fuente de configuración. Cambios aplicados en caliente. | sistema de archivos |
 | `DriftController` | Endpoints IPC (`ArchiController`). | `PlanStore`, `ConfigStore`, `Scheduler` |
 | `www/` | Página web estática (`/drift`): estado, configuración y ayuda. | endpoints IPC |
 
@@ -100,7 +100,7 @@ Al conectar el bot (`IBotConnection`) se recargan sus planes; al desconectar se 
 
 ## 5. Configuración
 
-Archivo `plugins/AchievementDrift/config/<bot>.json`, editable desde la web/IPC:
+Archivo `config/AchievementDrift/<bot>.config.json`, editable desde la web/IPC:
 
 | Clave | Por defecto | Descripción |
 |---|---|---|
@@ -160,7 +160,7 @@ disco se ignora con un warning y se usan los valores por defecto.
 
 ## 8. Pruebas
 
-Tests xUnit (sin Steam):
+Tests MSTest (sin Steam):
 
 - `PlanGenerator`: `Σhuecos = T`; hueco mínimo ≥ 15; juego completo nunca < `MinDays` días con franja
   diaria completa; en 1000 planes con semilla, un logro de 2% sale después de uno de 80% en > 90% de los casos;
@@ -191,3 +191,53 @@ luego activar modo real con un juego single-player barato.
 - **Categorías de tienda incompletas:** algunos juegos online no declaran categorías online. Mitigación: `Blacklist`.
 - **Logros validados por servidor no marcados como protegidos:** Steam puede rechazarlos; se marcan `Skipped`.
 - **SDK .NET 10** no instalado en el equipo de desarrollo; se instalará con permiso del usuario.
+
+## 11. Notas técnicas de ASF 6.3.10.5 (verificadas en el código fuente)
+
+Hallazgos del código de ASF que condicionan el diseño. Se replican en `docs/DEVELOPMENT.md` del repo.
+
+### Detección de juegos en reproducción
+- `ArchiHandler.PlayGames()` es `internal` y **no guarda** qué juegos envía a Steam. Por eso `!play` no es detectable
+  desde un plugin.
+- Fuentes públicas fiables:
+  - `bot.CardsFarmer.NowFarming` + `bot.CardsFarmer.CurrentGamesFarmingReadOnly` (`Game.AppID`): farmeo de cromos.
+  - `bot.BotConfig.GamesPlayedWhileIdle` (`ImmutableList<uint>`): se juegan cuando no se farmean cromos
+    (`Bot.ResetGamesPlayed()`), siempre que `bot.IsPlayingPossible` sea `true`.
+  - `!pause` también deja sonando `GamesPlayedWhileIdle`; `!play` los sustituye (por eso no se soporta).
+
+### Desbloqueo de logros (SteamKit2)
+- Se registra un `ClientMsgHandler` propio con `IBotSteamClient.OnBotSteamHandlersInit` (como ASF-Achievement-Manager).
+- Leer: `EMsg.ClientGetUserStats` (`CMsgClientGetUserStats { game_id, steam_id_for_user }`) → respuesta
+  `EMsg.ClientGetUserStatsResponse` con `schema` (KeyValues binario), `stats` (`stat_id`, `stat_value`) y `crc_stats`.
+- Esquema: en `stats/*` los nodos con `type` = `4` o `ACHIEVEMENTS` tienen `bits/<n>` con `name` (nombre API, el que usa
+  la Web API de porcentajes), `display/name/<idioma>` y opcionalmente `permission` (= protegido). Un logro está
+  desbloqueado si `stat_value & (1 << bit) != 0`. Si tiene `progress/value/operand1`, depende de un stat INT que hay que
+  poner a `progress/max_val`; si ese stat tiene `permission > 1`, el logro también es protegido.
+- Escribir: `EMsg.ClientStoreUserStats2` (`CMsgClientStoreUserStats2 { game_id, settor_steam_id, settee_steam_id,
+  crc_stats, explicit_reset = false, stats }`) → `EMsg.ClientStoreUserStatsResponse` (`eresult`).
+- Esperar respuestas con `new AsyncJob<T>(client, jobId).ToLongRunningTask()` (`ArchiSteamFarm.Core.Utilities`).
+
+### Almacenamiento
+- Las actualizaciones de plugins (`Utilities.UpdateFromArchive`) mueven los archivos de la carpeta del plugin a un backup:
+  **no se guardan datos en `plugins/AchievementDrift/`**.
+- Se usa `config/AchievementDrift/` (`SharedInfo.ConfigDirectory`). ASF solo escanea `config/*.json` del nivel superior
+  (bots) y su `FileSystemWatcher` no es recursivo, así que una subcarpeta es segura.
+
+### JSON
+- Se usan `JsonUtilities.ToJsonText()` / `ToJsonObject<T>()` de ASF (`JsonSerializerDefaults.Strict`, nombres en
+  **PascalCase**, sin naming policy, nullability respetada). La web y la IPC usan PascalCase.
+- ASF usa `DefaultJsonTypeInfoResolver` explícito, así que la serialización por reflexión funciona aun en builds recortadas.
+
+### IPC y página web
+- Controladores: clases `public` que heredan de `ArchiController`; ASF los descubre solo. Respuestas con `GenericResponse<T>`.
+  Los tipos expuestos en sus firmas deben ser `public`.
+- Autenticación: cabecera HTTP `Authentication: <IPCPassword>` (`ApiAuthenticationMiddleware`).
+- `IWebInterface`: `PhysicalPath` relativo a la carpeta del DLL; `WebPath = "/drift"`. ASF registra `UseDefaultFiles` +
+  `UseStaticFiles` para esa ruta. Las rutas no-API que dan 404 se re-ejecutan en `/` (ASF-ui), así que la URL correcta es
+  **`/drift/`** con barra final.
+
+### Build
+- Target `net10.0`; `Directory.Build.props` de ASF activa `AnalysisMode=AllEnabledByDefault` y
+  `TreatWarningsAsErrors` en Release. El código sigue el estilo de ASF (`ConfigureAwait(false)`, cultura invariante).
+- Las builds por SO de ASF (como `linux-x64`) se publican con `PublishTrimmed=true`.
+- La plantilla oficial ya apunta el submódulo de ASF a `6.3.10.5`.
