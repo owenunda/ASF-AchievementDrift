@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AchievementDrift.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -62,5 +63,25 @@ public sealed class ActiveWindowTests {
 		DateTime now = At(2026, 1, 1, 12, 0);
 
 		Assert.AreEqual(now, Utc("10:00-11:00").EstimateUtc(now, 0));
+	}
+
+	[TestMethod]
+	public void EstimateManyMatchesEstimateUtc() {
+		ActiveWindow window = Utc("10:00-11:00");
+		DateTime from = At(2026, 1, 1, 10, 30);
+		long[] minutes = [0, 1, 29, 30, 31, 95];
+
+		IReadOnlyList<DateTime?> many = window.EstimateManyUtc(from, minutes);
+
+		Assert.AreEqual(minutes.Length, many.Count);
+
+		for (int i = 0; i < minutes.Length; i++) {
+			Assert.AreEqual(window.EstimateUtc(from, minutes[i]), many[i], $"minutes {minutes[i]}");
+		}
+	}
+
+	[TestMethod]
+	public void EstimateManyRequiresAscendingOrder() {
+		Assert.ThrowsExactly<ArgumentException>(() => Utc("10:00-11:00").EstimateManyUtc(At(2026, 1, 1, 10, 0), [5, 3]));
 	}
 }

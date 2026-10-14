@@ -92,6 +92,49 @@ public sealed class SchemaParserTests {
 	}
 
 	[TestMethod]
+	public void ParsesDescriptionAndIcons() {
+		KeyValue schema = Node(
+			"440",
+			Node(
+				"stats",
+				Node(
+					"1",
+					Leaf("type", "4"),
+					Node(
+						"bits",
+						Node(
+							"0",
+							Leaf("name", "ACH_ICON"),
+							Node(
+								"display",
+								Node("name", Leaf("english", "Icon")),
+								Node("desc", Leaf("english", "Do it"), Leaf("spanish", "Hazlo")),
+								Leaf("icon", "abc.jpg"),
+								Leaf("icon_gray", "abc_gray.jpg")
+							)
+						)
+					)
+				)
+			)
+		);
+
+		SchemaAchievement achievement = SchemaParser.Parse(schema, new Dictionary<uint, uint>()).Single();
+
+		Assert.AreEqual("Hazlo", achievement.Description);
+		Assert.AreEqual("abc.jpg", achievement.Icon);
+		Assert.AreEqual("abc_gray.jpg", achievement.IconGray);
+	}
+
+	[TestMethod]
+	public void MissingDescriptionAndIconsAreEmpty() {
+		SchemaAchievement achievement = Parse().Single(static a => a.ApiName == "ACH_SECOND");
+
+		Assert.AreEqual("", achievement.Description);
+		Assert.AreEqual("", achievement.Icon);
+		Assert.AreEqual("", achievement.IconGray);
+	}
+
+	[TestMethod]
 	public void EmptySchemaReturnsEmpty() {
 		Assert.AreEqual(0, SchemaParser.Parse(new KeyValue("root"), new Dictionary<uint, uint>()).Count);
 	}

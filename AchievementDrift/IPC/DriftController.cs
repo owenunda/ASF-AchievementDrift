@@ -61,6 +61,25 @@ public sealed class DriftController : ArchiController {
 		return Ok(new GenericResponse(true));
 	}
 
+	/// <summary>Logros de un juego: estado en vivo de Steam combinado con los porcentajes globales y el plan.</summary>
+	[HttpGet("{botName:required}/Games/{appId:required}")]
+	[ProducesResponseType<GenericResponse<GameAchievements>>((int) HttpStatusCode.OK)]
+	public async Task<ActionResult<GenericResponse>> GameGet(string botName, uint appId) {
+		if (appId == 0) {
+			return BadRequest(new GenericResponse(false, "El appid debe ser mayor que 0."));
+		}
+
+		Bot? bot = FindBot(botName);
+
+		if (bot == null) {
+			return BadRequest(new GenericResponse(false, $"El bot {botName} no existe."));
+		}
+
+		GameAchievements result = await DriftRuntime.GetGameAchievementsAsync(bot, appId).ConfigureAwait(false);
+
+		return Ok(new GenericResponse<GameAchievements>(result));
+	}
+
 	/// <summary>Estado de los planes de logros de un bot.</summary>
 	[HttpGet("{botName:required}")]
 	[ProducesResponseType<GenericResponse<DriftStatus>>((int) HttpStatusCode.OK)]

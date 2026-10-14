@@ -5,7 +5,8 @@ using SteamKit2;
 
 namespace AchievementDrift.Steam;
 
-internal sealed record SchemaAchievement(string ApiName, string DisplayName, uint StatId, int Bit, bool IsUnlocked, bool IsProtected, uint? DependencyStatId, uint DependencyValue);
+// Description/Icon/IconGray = "" cuando el esquema no los trae; Icon/IconGray son nombres de archivo del CDN de Steam
+internal sealed record SchemaAchievement(string ApiName, string DisplayName, uint StatId, int Bit, bool IsUnlocked, bool IsProtected, uint? DependencyStatId, uint DependencyValue, string Description, string Icon, string IconGray);
 
 // Interpreta el esquema KeyValues de ClientGetUserStatsResponse (ver spec §11)
 internal static class SchemaParser {
@@ -57,25 +58,39 @@ internal static class SchemaParser {
 					isProtected |= dependency.Permission > 1;
 				}
 
-				result.Add(new SchemaAchievement(apiName, GetDisplayName(bitNode, apiName), statId, bit, (value & (1u << bit)) != 0, isProtected, dependencyStatId, dependencyValue));
+				KeyValue display = bitNode["display"];
+
+				result.Add(
+					new SchemaAchievement(
+						apiName,
+						GetLocalized(display["name"]) ?? apiName,
+						statId,
+						bit,
+						(value & (1u << bit)) != 0,
+						isProtected,
+						dependencyStatId,
+						dependencyValue,
+						GetLocalized(display["desc"]) ?? "",
+						display["icon"].Value ?? "",
+						display["icon_gray"].Value ?? ""
+					)
+				);
 			}
 		}
 
 		return result;
 	}
 
-	private static string GetDisplayName(KeyValue bitNode, string fallback) {
-		KeyValue names = bitNode["display"]["name"];
-
+	private static string? GetLocalized(KeyValue texts) {
 		foreach (string language in PreferredLanguages) {
-			string? name = names[language].Value;
+			string? text = texts[language].Value;
 
-			if (!string.IsNullOrWhiteSpace(name)) {
-				return name;
+			if (!string.IsNullOrWhiteSpace(text)) {
+				return text;
 			}
 		}
 
-		return fallback;
+		return null;
 	}
 
 	private static int ParseInt(string? text) => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) ? value : 0;

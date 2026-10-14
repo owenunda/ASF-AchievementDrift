@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace AchievementDrift.Core;
@@ -54,6 +55,42 @@ internal sealed class ActiveWindow {
 		DateTime local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcNow, DateTimeKind.Utc), TimeZone);
 
 		return TimeOnly.FromDateTime(local).IsBetween(Start, End);
+	}
+
+	// Igual que EstimateUtc para varios valores ascendentes a la vez, recorriendo la franja una sola vez
+	internal IReadOnlyList<DateTime?> EstimateManyUtc(DateTime fromUtc, IReadOnlyList<long> ascendingActiveMinutes) {
+		ArgumentNullException.ThrowIfNull(ascendingActiveMinutes);
+
+		DateTime?[] result = new DateTime?[ascendingActiveMinutes.Count];
+		DateTime cursor = new(fromUtc.Ticks - (fromUtc.Ticks % TimeSpan.TicksPerMinute), DateTimeKind.Utc);
+		long elapsed = 0;
+		int index = 0;
+
+		for (int i = 0; i < ascendingActiveMinutes.Count; i++) {
+			if ((i > 0) && (ascendingActiveMinutes[i] < ascendingActiveMinutes[i - 1])) {
+				throw new ArgumentException("Los minutos deben estar en orden ascendente.", nameof(ascendingActiveMinutes));
+			}
+		}
+
+		while ((index < result.Length) && (ascendingActiveMinutes[index] <= 0)) {
+			result[index++] = fromUtc;
+		}
+
+		for (int step = 0; (step < MaxEstimateMinutes) && (index < result.Length); step++) {
+			cursor = cursor.AddMinutes(1);
+
+			if (!Contains(cursor)) {
+				continue;
+			}
+
+			elapsed++;
+
+			while ((index < result.Length) && (ascendingActiveMinutes[index] == elapsed)) {
+				result[index++] = cursor;
+			}
+		}
+
+		return result;
 	}
 
 	// Instante UTC en el que se habrán acumulado activeMinutes minutos dentro de la franja, o null si excede el límite
