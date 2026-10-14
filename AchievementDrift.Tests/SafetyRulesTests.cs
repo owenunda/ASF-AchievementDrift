@@ -15,12 +15,32 @@ public sealed class SafetyRulesTests {
 	}
 
 	[TestMethod]
-	public void AllowlistBypassesStoreChecks() {
+	public void AllowlistBypassesUnknownOnlineAndNoAchievements() {
 		DriftConfig config = new() { Allowlist = [10] };
 
 		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, config, null));
-		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, config, Store(8, 1, 22)));
-		Assert.IsFalse(SafetyRules.NeedsStoreInfo(10, config));
+		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, config, new StoreInfo(false, "", [])));
+		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, config, Store(1, 22)));
+		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, config, Store(2)));
+	}
+
+	[TestMethod]
+	public void VacWinsOverAllowlistWhenExcludeVac() {
+		Assert.AreEqual(EEligibility.Vac, SafetyRules.Evaluate(10, new DriftConfig { Allowlist = [10] }, Store(8, 1, 22)));
+		Assert.AreEqual(EEligibility.Eligible, SafetyRules.Evaluate(10, new DriftConfig { Allowlist = [10], ExcludeVac = false }, Store(8, 1, 22)));
+	}
+
+	[TestMethod]
+	public void NeedsStoreInfoForAllowlistOnlyWhenExcludeVac() {
+		Assert.IsTrue(SafetyRules.NeedsStoreInfo(10, new DriftConfig { Allowlist = [10] }));
+		Assert.IsFalse(SafetyRules.NeedsStoreInfo(10, new DriftConfig { Allowlist = [10], ExcludeVac = false }));
+	}
+
+	[TestMethod]
+	public void NeedsStoreInfoIsFalseForBlacklist() {
+		Assert.IsFalse(SafetyRules.NeedsStoreInfo(10, new DriftConfig { Blacklist = [10] }));
+		Assert.IsFalse(SafetyRules.NeedsStoreInfo(10, new DriftConfig { Blacklist = [10], Allowlist = [10] }));
+		Assert.IsTrue(SafetyRules.NeedsStoreInfo(10, new DriftConfig { ExcludeVac = false }));
 	}
 
 	[TestMethod]

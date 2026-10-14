@@ -108,6 +108,7 @@ Hallazgos del código de ASF que condicionan el diseño.
 - **Datos en `config/AchievementDrift/`:** `<bot>.config.json`, `<bot>.state.json` y `store-cache.json` (compartido por todos los bots). Nunca en la carpeta del plugin.
 - **`DriftController` resuelve el bot desde el registro de ASF antes de tocar archivos.** `FindBot` obtiene el bot con `Bot.GetBot` y devuelve la instancia del registro interno (`Bot.BotsReadOnly`), de modo que el nombre que llega a las rutas de archivo nunca deriva directamente del texto de la petición (regla CA3003, path injection).
 - **Exclusiones adicionales a las del spec.** `SafetyRules` también excluye juegos sin datos de tienda y juegos sin la categoría de logros (id 22), salvo que estén en `Allowlist`.
+- **VAC gana a Allowlist (decisión de la revisión final).** Orden de `SafetyRules.Evaluate`: Blacklist → VAC (si hay datos de tienda, `ExcludeVac` y categoría 8) → Allowlist → sin datos → online → sin logros → elegible. Por eso `NeedsStoreInfo` devuelve `true` para juegos en Allowlist cuando `ExcludeVac` está activado (hay que consultar la tienda para ver el VAC) y `false` solo para juegos en Blacklist o en Allowlist con `ExcludeVac=false`. Un juego en Allowlist sin datos de tienda sigue siendo elegible.
 - **Concurrencia.** Cada `BotRunner` serializa tick, consultas de estado y `replan` con un `SemaphoreSlim`; un tick que no logra el candado en 30 s se omite.
 
 ## 4. Desarrollo local

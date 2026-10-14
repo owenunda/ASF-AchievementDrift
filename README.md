@@ -16,8 +16,8 @@ Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que
 - Solo avanza en juegos que el bot **está jugando en ese momento** (`GamesPlayedWhileIdle` o el farmeo de cromos). Si un juego deja de jugarse, su progreso se pausa.
 - Solo desbloquea dentro de un **horario humano** configurable, en tu zona horaria.
 - Como máximo `MaxActiveGames` juegos (2 por defecto) están en progreso a la vez; el resto espera turno.
-- Excluye automáticamente juegos con VAC y juegos online/multijugador, además de tu lista negra (`Blacklist`). Una lista blanca (`Allowlist`) fuerza la inclusión de juegos concretos.
-- También se excluyen los juegos sin datos de tienda o sin la categoría «Logros de Steam»; la `Allowlist` los fuerza igualmente.
+- Excluye automáticamente juegos con VAC y juegos online/multijugador, además de tu lista negra (`Blacklist`). Una lista blanca (`Allowlist`) fuerza la inclusión de juegos concretos, salvo los que tienen VAC mientras `ExcludeVac` esté activado (VAC siempre gana).
+- También se excluyen los juegos sin datos de tienda o sin la categoría «Logros de Steam»; la `Allowlist` los fuerza igualmente (también a los online, pero no a los VAC si `ExcludeVac` está activado).
 
 ## Cómo funciona el algoritmo
 
@@ -83,7 +83,7 @@ Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita 
 | `ExcludeVac` | `true` | Excluye juegos con VAC. |
 | `ExcludeOnline` | `true` | Excluye juegos con categorías online/multijugador. |
 | `Blacklist` | `[]` | Appids excluidos siempre. |
-| `Allowlist` | `[]` | Appids incluidos siempre (salvo que estén en `Blacklist`). |
+| `Allowlist` | `[]` | Appids incluidos aunque sean online, no tengan datos de tienda o no muestren logros (salvo que estén en `Blacklist`, o tengan VAC con `ExcludeVac` activado). |
 
 Los valores inválidos se rechazan (la API responde 400 con un mensaje); si el archivo está corrupto se ignora con un aviso en el log y se usan los valores por defecto. Cambiar `MinDays`/`MaxDays` no regenera planes existentes, solo afecta a planes nuevos.
 
@@ -129,7 +129,7 @@ Para **reiniciar el progreso** de un bot: detén ASF y borra su `<bot>.state.jso
 
 **¿Funciona si uso `!play`?** No. ASF no guarda qué juegos se le piden con `!play`, así que el plugin no puede detectarlos. Usa `GamesPlayedWhileIdle`.
 
-**¿Por qué se excluyó un juego?** El log indica el motivo con una línea `[AchievementDrift] Se excluye ...`. Puedes forzar su inclusión con `Allowlist` o excluirlo siempre con `Blacklist`.
+**¿Por qué se excluyó un juego?** El log indica el motivo con una línea `[AchievementDrift] Se excluye ...`. Puedes forzar su inclusión con `Allowlist` (no sirve para juegos con VAC mientras `ExcludeVac` esté activado) o excluirlo siempre con `Blacklist`.
 
 **¿Qué pasa con los logros protegidos?** Se saltan: nunca entran al plan. Si Steam rechaza un desbloqueo, ese logro se marca como saltado y se registra un aviso.
 
