@@ -43,6 +43,24 @@ public sealed partial class TextsTests {
 	public void InvariantCultureIsEnglish() => Assert.IsFalse(Texts.IsSpanish(CultureInfo.InvariantCulture));
 
 	[TestMethod]
+	public void LogUsesLogCultureNotTheRequestCulture() {
+		CultureInfo previousLog = Texts.LogCulture;
+		CultureInfo previousUi = CultureInfo.CurrentUICulture;
+
+		try {
+			// ASF en inglés, petición del panel en español: el log debe seguir en inglés
+			Texts.LogCulture = English;
+			CultureInfo.CurrentUICulture = Spanish;
+
+			StringAssert.StartsWith(Texts.Log(ETextKey.LogStarted, 3), "[AchievementDrift] Started (3");
+			StringAssert.StartsWith(Texts.Format(ETextKey.CmdEnabled), "AchievementDrift activado");
+		} finally {
+			Texts.LogCulture = previousLog;
+			CultureInfo.CurrentUICulture = previousUi;
+		}
+	}
+
+	[TestMethod]
 	public void FormatUsesInvariantNumbers() {
 		Assert.AreEqual("[AchievementDrift] Achievement unlocked: \"A\" (61.5%) in G", Texts.FormatFor(English, ETextKey.LogUnlocked, "A", 61.5, "G"));
 		Assert.AreEqual("[AchievementDrift] Logro desbloqueado: \"A\" (61.5%) en G", Texts.FormatFor(Spanish, ETextKey.LogUnlocked, "A", 61.5, "G"));

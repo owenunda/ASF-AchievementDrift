@@ -26,7 +26,7 @@ internal static class JsonFileStore {
 
 			return json.ToJsonObject<T>();
 		} catch (Exception e) {
-			ASF.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogReadError, path, e.Message));
+			ASF.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogReadError, path, e.Message));
 
 			return null;
 		}

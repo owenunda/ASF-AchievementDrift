@@ -1,7 +1,10 @@
 using AchievementDrift.Core;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using ArchiSteamFarm.Core;
 using ArchiSteamFarm.Steam;
@@ -12,8 +15,18 @@ namespace AchievementDrift.Steam;
 
 internal sealed record StatsSnapshot(IReadOnlyList<SchemaAchievement> Achievements, IReadOnlyDictionary<uint, uint> StatValues, uint CrcStats);
 
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable", Justification = "SteamKit2 owns the handler's lifetime and never disposes it; the semaphore holds no OS handle")]
 internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
+	// Tiempo que ASF espera una respuesta de Steam (Utilities.ToLongRunningTask)
+	private const byte ResponseTimeoutSeconds = 60;
+
 	private readonly Bot Bot = bot ?? throw new ArgumentNullException(nameof(bot));
+
+	// Consultas del mismo juego (y mismo idioma de nombres) en curso: se comparte la respuesta en vez de repetir la petición
+	private readonly ConcurrentDictionary<(uint AppId, bool Spanish), Lazy<Task<StatsSnapshot?>>> InFlight = new();
+
+	// Una petición a Steam a la vez por bot: varias "Ver logros" seguidas no llegan a Steam en ráfaga
+	private readonly SemaphoreSlim RequestLock = new(1, 1);
 
 	public override void HandleMsg(IPacketMsg packetMsg) {
 		ArgumentNullException.ThrowIfNull(packetMsg);
@@ -32,7 +45,31 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 		}
 	}
 
-	internal async Task<StatsSnapshot?> GetAsync(uint appId) {
+	internal Task<StatsSnapshot?> GetAsync(uint appId) {
+		(uint AppId, bool Spanish) key = (appId, Texts.IsSpanish());
+
+		return InFlight.GetOrAdd(key, requestKey => new Lazy<Task<StatsSnapshot?>>(() => FetchAndReleaseAsync(requestKey))).Value;
+	}
+
+	private async Task<StatsSnapshot?> FetchAndReleaseAsync((uint AppId, bool Spanish) key) {
+		try {
+			return await FetchAsync(key.AppId).ConfigureAwait(false);
+		} finally {
+			InFlight.TryRemove(key, out _);
+		}
+	}
+
+	private async Task<StatsSnapshot?> FetchAsync(uint appId) {
+		await RequestLock.WaitAsync().ConfigureAwait(false);
+
+		try {
+			return await RequestStatsAsync(appId).ConfigureAwait(false);
+		} finally {
+			RequestLock.Release();
+		}
+	}
+
+	private async Task<StatsSnapshot?> RequestStatsAsync(uint appId) {
 		if (!Client.IsConnected) {
 			return null;
 		}
@@ -51,6 +88,11 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		try {
 			callback = await new AsyncJob<GetStatsCallback>(Client, request.SourceJobID).ToLongRunningTask().ConfigureAwait(false);
+		} catch (TaskCanceledException) {
+			// Steam no respondió a tiempo: es pasajero y quien llama reintenta más tarde
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogStatsTimeout, appId, ResponseTimeoutSeconds));
+
+			return null;
 		} catch (Exception e) {
 			Bot.ArchiLogger.LogGenericWarningException(e);
 
@@ -60,7 +102,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 		CMsgClientGetUserStatsResponse response = callback.Response;
 
 		if ((EResult) response.eresult != EResult.OK) {
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogNoStats, appId, (EResult) response.eresult));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogNoStats, appId, (EResult) response.eresult));
 
 			return null;
 		}
@@ -79,7 +121,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		using (MemoryStream stream = new(response.schema)) {
 			if (!schema.TryReadAsBinary(stream)) {
-				Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogInvalidSchema, appId));
+				Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogInvalidSchema, appId));
 
 				return null;
 			}
@@ -92,6 +134,16 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 		ArgumentNullException.ThrowIfNull(achievement);
 		ArgumentNullException.ThrowIfNull(snapshot);
 
+		await RequestLock.WaitAsync().ConfigureAwait(false);
+
+		try {
+			return await StoreAsync(appId, achievement, snapshot).ConfigureAwait(false);
+		} finally {
+			RequestLock.Release();
+		}
+	}
+
+	private async Task<bool?> StoreAsync(uint appId, SchemaAchievement achievement, StatsSnapshot snapshot) {
 		if (!Client.IsConnected) {
 			return null;
 		}
@@ -119,6 +171,10 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		try {
 			callback = await new AsyncJob<StoreStatsCallback>(Client, request.SourceJobID).ToLongRunningTask().ConfigureAwait(false);
+		} catch (TaskCanceledException) {
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogStoreTimeout, appId, ResponseTimeoutSeconds));
+
+			return null;
 		} catch (Exception e) {
 			Bot.ArchiLogger.LogGenericWarningException(e);
 
@@ -133,12 +189,12 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		if (IsTransient(result)) {
 			// Error temporal de Steam: el logro sigue pendiente y se reintenta más tarde
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogStoreTransient, appId, result));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogStoreTransient, appId, result));
 
 			return null;
 		}
 
-		Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogStoreRejected, appId, result));
+		Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogStoreRejected, appId, result));
 
 		return false;
 	}

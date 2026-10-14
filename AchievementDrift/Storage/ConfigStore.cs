@@ -20,10 +20,10 @@ internal sealed class ConfigStore {
 		}
 
 		DriftConfig config = await JsonFileStore.LoadAsync<DriftConfig>(FileName(botName)).ConfigureAwait(false) ?? new DriftConfig();
-		IReadOnlyList<string> errors = config.Validate();
+		IReadOnlyList<string> errors = config.Validate(Texts.LogCulture);
 
 		if (errors.Count > 0) {
-			ASF.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogInvalidConfig, botName, string.Join(" ", errors)));
+			ASF.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogInvalidConfig, botName, string.Join(" ", errors)));
 			config = new DriftConfig();
 		}
 

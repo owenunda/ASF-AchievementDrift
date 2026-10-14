@@ -66,6 +66,8 @@ internal enum ETextKey {
 	LogStoreRejected,
 	LogInvalidConfig,
 	LogReadError,
+	LogStatsTimeout,
+	LogStoreTimeout,
 
 	ApiBotNotFound,
 	ApiAppIdZero
@@ -135,6 +137,8 @@ internal static class Texts {
 		[ETextKey.LogStoreRejected] = "[AchievementDrift] Steam refused to save the achievement of {0}: {1}",
 		[ETextKey.LogInvalidConfig] = "[AchievementDrift] Invalid configuration for {0} ({1}); using defaults.",
 		[ETextKey.LogReadError] = "[AchievementDrift] Could not read {0}, using defaults: {1}",
+		[ETextKey.LogStatsTimeout] = "[AchievementDrift] Steam did not answer the stats request for {0} within {1} s; it will be retried later.",
+		[ETextKey.LogStoreTimeout] = "[AchievementDrift] Steam did not confirm the achievement of {0} within {1} s; it will be retried later.",
 
 		[ETextKey.ApiBotNotFound] = "The bot {0} does not exist.",
 		[ETextKey.ApiAppIdZero] = "The appid must be greater than 0."
@@ -201,12 +205,19 @@ internal static class Texts {
 		[ETextKey.LogStoreRejected] = "[AchievementDrift] Steam rechazó guardar el logro de {0}: {1}",
 		[ETextKey.LogInvalidConfig] = "[AchievementDrift] Configuración inválida para {0} ({1}); se usan valores por defecto.",
 		[ETextKey.LogReadError] = "[AchievementDrift] No se pudo leer {0}, se usarán valores por defecto: {1}",
+		[ETextKey.LogStatsTimeout] = "[AchievementDrift] Steam no respondió a la consulta de estadísticas de {0} en {1} s; se reintentará más tarde.",
+		[ETextKey.LogStoreTimeout] = "[AchievementDrift] Steam no confirmó el logro de {0} en {1} s; se reintentará más tarde.",
 
 		[ETextKey.ApiBotNotFound] = "El bot {0} no existe.",
 		[ETextKey.ApiAppIdZero] = "El appid debe ser mayor que 0."
 	}.ToFrozenDictionary();
 
+	// Idioma del log: el de ASF, fijado al cargar el plugin. Los mensajes del log no deben seguir el idioma de una petición del panel
+	internal static CultureInfo LogCulture { get; set; } = CultureInfo.InvariantCulture;
+
 	internal static string Format(ETextKey key, params object?[] args) => FormatFor(null, key, args);
+
+	internal static string Log(ETextKey key, params object?[] args) => FormatFor(LogCulture, key, args);
 
 	internal static string FormatFor(CultureInfo? culture, ETextKey key, params object?[] args) => string.Format(CultureInfo.InvariantCulture, Get(key, culture), args);
 

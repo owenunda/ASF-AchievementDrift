@@ -58,7 +58,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 		BotRunner runner = new(bot, state);
 		runner.Timer = new Timer(runner.OnTimer, null, TickPeriod, TickPeriod);
 
-		bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogStarted, state.Plans.Count));
+		bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogStarted, state.Plans.Count));
 
 		return runner;
 	}
@@ -130,7 +130,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 		if (config.DryRun) {
 			DriftEngine.RecordUnlock(plan, entry, EEntryState.Simulated, nowUtc);
-			Bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogDryRunUnlock, entry.DisplayName, entry.GlobalPercent, plan.GameName));
+			Bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogDryRunUnlock, entry.DisplayName, entry.GlobalPercent, plan.GameName));
 
 			return true;
 		}
@@ -152,7 +152,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 		if ((target == null) || target.IsProtected) {
 			DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogGoneOrProtected, entry.DisplayName, plan.GameName));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogGoneOrProtected, entry.DisplayName, plan.GameName));
 
 			return true;
 		}
@@ -162,12 +162,12 @@ internal sealed class BotRunner : IAsyncDisposable {
 		switch (success) {
 			case true:
 				DriftEngine.RecordUnlock(plan, entry, EEntryState.Unlocked, nowUtc);
-				Bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogUnlocked, entry.DisplayName, entry.GlobalPercent, plan.GameName));
+				Bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogUnlocked, entry.DisplayName, entry.GlobalPercent, plan.GameName));
 
 				return true;
 			case false:
 				DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
-				Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogRejected, entry.DisplayName, plan.GameName));
+				Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogRejected, entry.DisplayName, plan.GameName));
 
 				return true;
 			default:
@@ -201,11 +201,11 @@ internal sealed class BotRunner : IAsyncDisposable {
 					LoggedEligibility[appId] = eligibility;
 
 					if (eligibility != EEligibility.Eligible) {
-						Bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogExcluded, info?.Name ?? appId.ToString(CultureInfo.InvariantCulture), appId, SafetyRules.Describe(eligibility)));
+						Bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogExcluded, info?.Name ?? appId.ToString(CultureInfo.InvariantCulture), appId, SafetyRules.Describe(eligibility, Texts.LogCulture)));
 					}
 				}
 			} catch (Exception e) {
-				Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogEvalError, appId, e.Message));
+				Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogEvalError, appId, e.Message));
 			}
 		}
 
@@ -224,7 +224,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 		if (count < MaxUnlockFailures) {
 			UnlockFailures[decision.AppId] = (entry.ApiName, count);
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogUnlockFailed, entry.DisplayName, gameName, count, MaxUnlockFailures, RetryMinutes));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogUnlockFailed, entry.DisplayName, gameName, count, MaxUnlockFailures, RetryMinutes));
 
 			return;
 		}
@@ -235,7 +235,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 			DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
 		}
 
-		Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogUnlockGaveUp, entry.DisplayName, gameName, MaxUnlockFailures));
+		Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogUnlockGaveUp, entry.DisplayName, gameName, MaxUnlockFailures));
 	}
 
 	private void StartCooldown(uint appId, DateTime nowUtc) => CooldownUntil[appId] = nowUtc + RetryDelay;
@@ -262,7 +262,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 		List<AchievementInfo> newOnes = added.Select(achievement => new AchievementInfo(achievement.ApiName, achievement.DisplayName, percents.GetValueOrDefault(achievement.ApiName, double.NaN))).ToList();
 
 		PlanGenerator.Append(plan, newOnes, snapshot.Achievements.Count(static achievement => !achievement.IsProtected), config, window.MinutesPerDay, Random.Shared);
-		Bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogNewAchievements, newOnes.Count, plan.GameName));
+		Bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogNewAchievements, newOnes.Count, plan.GameName));
 	}
 
 	private async Task TickAsync() {
@@ -290,7 +290,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 					changed |= await TryCreatePlanAsync(appId, config, window, nowUtc).ConfigureAwait(false);
 				} catch (Exception e) {
 					StartCooldown(appId, nowUtc);
-					Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogPlanError, appId, RetryMinutes, e.Message));
+					Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogPlanError, appId, RetryMinutes, e.Message));
 				}
 			}
 
@@ -301,7 +301,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 					handled = await ExecuteUnlockAsync(result.Unlock, config, window, nowUtc).ConfigureAwait(false);
 				} catch (Exception e) {
 					handled = false;
-					Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogUnlockError, result.Unlock.AppId, e.Message));
+					Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogUnlockError, result.Unlock.AppId, e.Message));
 				}
 
 				if (handled) {
@@ -329,7 +329,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 		if (snapshot == null) {
 			StartCooldown(appId, nowUtc);
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogNoAchievements, appId, RetryMinutes));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogNoAchievements, appId, RetryMinutes));
 
 			return false;
 		}
@@ -342,13 +342,13 @@ internal sealed class BotRunner : IAsyncDisposable {
 			if (failures < MaxPercentFailures) {
 				PercentFailures[appId] = failures;
 				StartCooldown(appId, nowUtc);
-				Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogNoPercents, appId, failures, MaxPercentFailures, RetryMinutes));
+				Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogNoPercents, appId, failures, MaxPercentFailures, RetryMinutes));
 
 				return false;
 			}
 
 			// Spec §3.1: sin porcentaje se usa el 50 % (PlanGenerator.NormalizePercent con NaN)
-			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogNoPercentsFallback, appId, MaxPercentFailures));
+			Bot.ArchiLogger.LogGenericWarning(Texts.Log(ETextKey.LogNoPercentsFallback, appId, MaxPercentFailures));
 			percents = [];
 		}
 
@@ -368,7 +368,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 		int protectedCount = snapshot.Achievements.Count(static achievement => achievement.IsProtected);
 		double days = window.MinutesPerDay == 0 ? 0 : plan.PlanMinutes / (double) window.MinutesPerDay;
-		Bot.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogPlanCreated, gameName, pending.Count, protectedCount, days));
+		Bot.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogPlanCreated, gameName, pending.Count, protectedCount, days));
 
 		return true;
 	}

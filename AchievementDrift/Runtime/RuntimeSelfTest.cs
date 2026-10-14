@@ -38,7 +38,7 @@ internal static class RuntimeSelfTest {
 			return true;
 		}
 
-		ASF.ArchiLogger.LogGenericError(Texts.Format(ETextKey.LogTrimmed, string.Join(", ", missing)));
+		ASF.ArchiLogger.LogGenericError(Texts.Log(ETextKey.LogTrimmed, string.Join(", ", missing)));
 
 		return false;
 	}

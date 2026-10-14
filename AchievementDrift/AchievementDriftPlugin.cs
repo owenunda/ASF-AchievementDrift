@@ -1,5 +1,6 @@
 using AchievementDrift.Core;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using AchievementDrift.Commands;
@@ -46,7 +47,10 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 	}
 
 	public Task OnLoaded() {
-		ASF.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogLoaded, Name, Version, StatusBuilder.PanelPath));
+		// ASF ya aplicó su CurrentCulture: será el idioma del log, aunque luego lleguen peticiones del panel en otro idioma
+		Texts.LogCulture = CultureInfo.CurrentUICulture;
+
+		ASF.ArchiLogger.LogGenericInfo(Texts.Log(ETextKey.LogLoaded, Name, Version, StatusBuilder.PanelPath));
 		RuntimeSelfTest.Run();
 
 		return Task.CompletedTask;
