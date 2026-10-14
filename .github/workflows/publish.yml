@@ -202,8 +202,8 @@ jobs:
         artifacts: "out/*"
         bodyFile: .github/RELEASE_TEMPLATE.md
         immutableCreate: true
-        makeLatest: false
+        makeLatest: true
         name: ${{ needs.publish.outputs.PLUGIN_NAME }} V${{ github.ref_name }}
-        prerelease: true
+        prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
         updateOnlyUnreleased: true
