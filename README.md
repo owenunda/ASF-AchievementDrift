@@ -1,57 +1,87 @@
 # ASF-AchievementDrift
 
-Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que desbloquea logros de forma gradual y realista mientras farmeas horas.
+**English** · [🇪🇸 Leer en español](README.es.md)
 
-## ⚠️ Aviso importante
+Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that unlocks achievements gradually and realistically while you idle hours.
 
-- **Modificar logros va contra los términos de Steam.** Úsalo bajo tu propia responsabilidad.
-- Hay riesgo en juegos con anti-cheat (VAC) o con estadísticas validadas en el servidor. El plugin excluye por defecto los juegos con VAC y los online/multijugador, pero la detección no es perfecta (algunos juegos online no declaran sus categorías): usa `Blacklist` si dudas.
-- `DryRun` está **activo por defecto**: el plugin solo simula y escribe en el log lo que haría. Debes desactivarlo tú a mano.
+## ⚠️ Important
 
-## Qué hace
+- **Modifying achievements is against Steam's terms.** Use it at your own risk.
+- Games with anti-cheat (VAC) or server-validated stats are risky. By default the plugin excludes VAC games and online/multiplayer games, but detection is not perfect (some online games do not declare their categories): use `Blacklist` when in doubt.
+- `DryRun` is **on by default**: the plugin only simulates and logs what it would do. You have to turn it off yourself.
 
-- Los logros con menor % global de obtención tardan más y tienden a salir **al final**.
-- Cada juego tarda **como mínimo `MinDays` días de calendario** (30 por defecto) en completarse, mientras no amplíes el horario activo después de crear su plan (ver preguntas frecuentes).
-- El orden y los tiempos de desbloqueo son **aleatorios**.
-- Solo avanza en juegos que el bot **está jugando en ese momento** (`GamesPlayedWhileIdle` o el farmeo de cromos). Si un juego deja de jugarse, su progreso se pausa.
-- Solo desbloquea dentro de un **horario humano** configurable, en tu zona horaria.
-- Como máximo `MaxActiveGames` juegos (2 por defecto) están en progreso a la vez; el resto espera turno.
-- Excluye automáticamente juegos con VAC y juegos online/multijugador, además de tu lista negra (`Blacklist`). Una lista blanca (`Allowlist`) fuerza la inclusión de juegos concretos, salvo los que tienen VAC mientras `ExcludeVac` esté activado (VAC siempre gana).
-- También se excluyen los juegos sin datos de tienda o sin la categoría «Logros de Steam»; la `Allowlist` los fuerza igualmente (también a los online, pero no a los VAC si `ExcludeVac` está activado).
+## What it does
 
-## Cómo funciona el algoritmo
+- Achievements with a lower global unlock % take longer and tend to come **last**.
+- Each game takes **at least `MinDays` calendar days** (30 by default) to complete, as long as you do not widen the active hours after its plan is created (see the FAQ).
+- The unlock order and timing are **random**.
+- It only progresses on games the bot **is playing right now** (`GamesPlayedWhileIdle` or card farming). If a game stops being played, its progress pauses.
+- It only unlocks within configurable **human-like active hours**, in your time zone.
+- At most `MaxActiveGames` games (2 by default) are in progress at once; the rest wait their turn.
+- It automatically excludes VAC games and online/multiplayer games, plus your `Blacklist`. An `Allowlist` forces specific games in, except VAC games while `ExcludeVac` is on (VAC always wins).
+- Games without store data or without the "Steam Achievements" category are excluded too; the `Allowlist` forces them in as well (and online games, but not VAC games while `ExcludeVac` is on).
+- **English and Spanish**: the web panel has an EN/ES switch; commands and log messages follow ASF's language (see [Language](#language)).
 
-El plan de un juego se crea la primera vez que un juego elegible aparece en reproducción:
+## How the algorithm works
 
-1. **Candidatos:** los logros no desbloqueados y no protegidos, cada uno con su % global de obtención `p` (acotado a `[0,1 ; 100]`; si Steam no lo da se usa 50).
-2. **Presupuesto:** `T = aleatorio(MinDays, MaxDays) × minutos de franja por día × (pendientes / total)`. En un día de calendario no caben más minutos activos que los de la franja, así que un juego empezado desde cero no se completa antes de `MinDays` días mientras no se amplíe el horario `ActiveHours` después de crear el plan (el plan se mide en minutos activos: ampliar la franja da más minutos por día).
-3. **Orden:** cada logro recibe la clave `k = U^(1/p)` con `U` uniforme en `(0,1)` y se ordena por `k` descendente (muestreo ponderado). Los comunes tienden a salir antes y los raros al final.
-4. **Espaciado:** el hueco previo de cada logro es `(1/√p) × aleatorio(0,5 ; 1,5)`. Los huecos se escalan para que sumen `T`, con un mínimo de 15 minutos activos entre logros.
+A game's plan is created the first time an eligible game shows up as being played:
 
-**Ejemplo:** horario `10:00-01:00` (15 h = 900 minutos al día), `MinDays = 30` y `MaxDays = 45`. El presupuesto de un juego nuevo está entre 30 × 900 = **27 000** y 45 × 900 = **40 500** minutos activos. Un logro del 2 % espera en promedio unas 6 veces más que uno del 80 % (`√(80/2) ≈ 6,3`), y el del 2 % sale después del del 80 % en aproximadamente el 97 % de los planes.
+1. **Candidates:** achievements that are neither unlocked nor protected, each with its global unlock % `p` (clamped to `[0.1, 100]`; 50 if Steam does not provide it).
+2. **Budget:** `T = random(MinDays, MaxDays) × window minutes per day × (pending / total)`. A calendar day cannot hold more active minutes than the window has, so a game started from scratch is not completed before `MinDays` days as long as `ActiveHours` is not widened after the plan is created (the plan is measured in active minutes: a wider window gives more minutes per day).
+3. **Order:** each achievement gets the key `k = U^(1/p)` with `U` uniform in `(0,1)` and they are sorted by descending `k` (weighted sampling). Common ones tend to come first and rare ones last.
+4. **Spacing:** the gap before each achievement is `(1/√p) × random(0.5, 1.5)`. Gaps are scaled to add up to `T`, with a minimum of 15 active minutes between achievements.
 
-Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progreso y desbloquea, como máximo, **un logro por tick y por bot**: el pendiente más antiguo cuyo momento ya llegó. Aunque se acumulen varios logros vencidos (por ejemplo tras una pausa), un mismo juego nunca desbloquea dos logros con menos de 15 minutos activos de diferencia.
+**Example:** active hours `10:00-01:00` (15 h = 900 minutes per day), `MinDays = 30` and `MaxDays = 45`. The budget of a new game is between 30 × 900 = **27,000** and 45 × 900 = **40,500** active minutes. A 2% achievement waits on average about 6 times longer than an 80% one (`√(80/2) ≈ 6.3`), and the 2% one comes after the 80% one in about 97% of the plans.
 
-Si Steam falla con un juego (no responde, da un error temporal o no se puede crear su plan), ese juego deja su hueco a otro y se reintenta pasados 30 minutos; los demás juegos siguen avanzando. Si el mismo logro falla 5 veces seguidas, se salta. Si no se pueden obtener los porcentajes globales tras 3 intentos, el plan se crea suponiendo un 50 % para cada logro.
+Every minute (a "tick") the plugin adds one active minute to the games in progress and unlocks at most **one achievement per tick and per bot**: the oldest pending one whose time has come. Even if several achievements are overdue (for example after a pause), the same game never unlocks two achievements less than 15 active minutes apart.
 
-## Requisitos
+If Steam fails for a game (no response, a temporary error, or its plan cannot be created), that game gives its slot to another one and is retried after 30 minutes; the other games keep progressing. If the same achievement fails 5 times in a row, it is skipped. If the global percentages cannot be fetched after 3 attempts, the plan is created assuming 50% for each achievement.
 
-- ASF **6.3.10.5** o compatible.
-- La build **`generic`** de ASF es **requerida** en lugar de las builds por sistema operativo (`linux-x64`, `win-x64`…): estas se publican recortadas (*trimmed*) y les faltan partes de .NET que el plugin usa, lo que provoca `MissingMethodException`. La imagen oficial de Docker de ASF no está recortada (usa el runtime de .NET), así que también sirve. Al cargar, el plugin comprueba esto y, si detecta una build recortada, lo avisa con un error en el log.
-- El bot debe estar farmeando horas, normalmente con `GamesPlayedWhileIdle` (o farmeando cromos).
+## Requirements
 
-## Instalación
+- ASF **6.3.10.5** or compatible.
+- The ASF **`generic`** build is **required** instead of the OS-specific builds (`linux-x64`, `win-x64`…): those are published trimmed and miss parts of .NET the plugin uses, which causes `MissingMethodException`/`TypeLoadException`. **The official Docker image (`justarchi/archisteamfarm`) is trimmed too**: with Docker, run ASF-generic on Microsoft's .NET image (see [Docker](#docker)). On load, the plugin checks this and logs an error if it detects a trimmed build.
+- The bot must be idling hours, usually with `GamesPlayedWhileIdle` (or farming cards).
 
-1. Descarga `AchievementDrift.zip` del [último release](https://github.com/owenunda/ASF-AchievementDrift/releases). Los releases marcados como *pre-release* son versiones de prueba.
-2. Extrae el contenido en `plugins/AchievementDrift/` dentro de tu carpeta de ASF.
-3. Reinicia ASF.
-4. Comprueba en el log la línea `AchievementDrift ... cargado` y que el plugin aparece en la pestaña **Plugins** del panel de ASF.
+## Installation
 
-**Docker:** copia o monta la carpeta extraída en `/app/plugins/AchievementDrift`. Para que la configuración y el progreso sobrevivan a recrear el contenedor, asegúrate de que `/app/config` también es persistente. Los contenedores suelen ejecutarse en **UTC**: configura `TimeZone` con tu zona (el panel `/drift/` detecta la de tu navegador y te ofrece usarla); si no, el horario activo se aplicará en hora UTC.
+1. Download `AchievementDrift.zip` from the [latest release](https://github.com/owenunda/ASF-AchievementDrift/releases/latest).
+2. Extract its contents into `plugins/AchievementDrift/` inside your ASF folder.
+3. Restart ASF.
+4. Check the log for the line `AchievementDrift ... loaded` and that the plugin shows up in the **Plugins** tab of the ASF panel.
 
-## Actualizaciones automáticas
+### Docker
 
-Con los valores por defecto de ASF (`PluginsUpdateMode` = `Whitelist` y `PluginsUpdateList` vacía) **ningún plugin se actualiza solo**. Para activarlo en este plugin, añade `AchievementDrift` a `PluginsUpdateList` en `config/ASF.json` (manteniendo `Whitelist`) y reinicia ASF:
+The official image is trimmed, so run the `generic` build on `mcr.microsoft.com/dotnet/aspnet` instead. Download [`ASF-generic.zip`](https://github.com/JustArchiNET/ArchiSteamFarm/releases/latest), extract it into a folder (`./asf` below, owned by UID 1000) and use a compose like this one:
+
+```yaml
+services:
+  asf:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    restart: unless-stopped
+    user: "1000:1000"
+    working_dir: /asf
+    entrypoint: ["dotnet", "/asf/ArchiSteamFarm.dll", "--no-restart"]
+    environment:
+      - ASF_CRYPTKEY=${ASF_CRYPTKEY}
+      - ASPNETCORE_URLS=
+      - HOME=/asf
+    volumes:
+      - ./asf:/asf
+      - ./config:/asf/config
+      - ./logs:/asf/logs
+    ports:
+      - "1242:1242"
+```
+
+- The plugin goes in `./asf/plugins/AchievementDrift/` (next to the official plugins that come with ASF-generic).
+- ASF updates itself in `./asf`: after an update it exits (`--no-restart`) and Docker starts it again.
+- For the IPC to listen inside the container, `config/IPC.config` must bind `http://*:1242`.
+- Containers usually run in **UTC**: set `TimeZone` to your zone (the `/drift/` panel detects your browser's zone and offers to use it); otherwise the active hours are applied in UTC.
+
+## Automatic updates
+
+With ASF's defaults (`PluginsUpdateMode` = `Whitelist` and an empty `PluginsUpdateList`) **no plugin updates itself**. To enable it for this plugin, add `AchievementDrift` to `PluginsUpdateList` in `config/ASF.json` (keeping `Whitelist`) and restart ASF:
 
 ```json
 {
@@ -59,90 +89,98 @@ Con los valores por defecto de ASF (`PluginsUpdateMode` = `Whitelist` y `Plugins
 }
 ```
 
-Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases marcados como estables/«latest»; con `PreRelease` también toma las versiones de prueba. `UpdateChannel` también se define en `config/ASF.json`. En ese archivo los valores de enumeración son numéricos: `PluginsUpdateMode`: `0` = `Whitelist`, `1` = `Blacklist`; `UpdateChannel`: `1` = `Stable`, `2` = `PreRelease`.
+With `UpdateChannel` = `Stable` (the default) ASF only takes releases marked as stable/latest; with `PreRelease` it also takes test builds. `UpdateChannel` is set in `config/ASF.json` too. In that file enum values are numeric: `PluginsUpdateMode`: `0` = `Whitelist`, `1` = `Blacklist`; `UpdateChannel`: `1` = `Stable`, `2` = `PreRelease`.
 
-## Primeros pasos
+## Getting started
 
-1. Abre `https://<tu-asf>/drift/` (**con la barra final**).
-2. Introduce el `IPCPassword` de ASF (se guarda en el navegador).
-3. Acepta la zona horaria que detecta la página, o ajusta la tuya.
-4. Deja `DryRun` activo y revisa el log: verás líneas `[AchievementDrift][DryRun] Desbloquearía "..." ...`.
-5. Cuando estés conforme, desactiva `DryRun`. Mientras está activo, el estado muestra los logros simulados como hechos (solo para que veas el avance; en Steam no se obtiene nada). Al desactivarlo, todo plan con logros simulados se descarta y se vuelve a generar en modo real desde el estado real de Steam.
+1. Open `https://<your-asf>/drift/` (**with the trailing slash**).
+2. Enter ASF's `IPCPassword` (it is stored in your browser).
+3. Accept the time zone the page detects, or set yours.
+4. Leave `DryRun` on and check the log: you will see `[AchievementDrift][DryRun] Would unlock "..." ...` lines.
+5. When you are happy, turn `DryRun` off. While it is on, the status shows simulated achievements as done (only so you can see the progress; nothing is unlocked on Steam). When you turn it off, every plan with simulated achievements is discarded and regenerated in real mode from the real Steam state.
 
-## Configuración
+## Language
 
-Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita desde la página web (`/drift/`) o por la API IPC, y los cambios se aplican **en caliente**, sin reiniciar. Si editas el archivo a mano con ASF en marcha, el cambio no se aplica hasta reiniciar ASF y puede sobrescribirse con el siguiente guardado desde la web, la API o los comandos. La configuración vive solo en este archivo (no en el JSON del bot de ASF).
+- **Web panel:** the **EN / ES** buttons in the header switch the language. The first time, the browser's language is used; your choice is remembered. Achievement names in the "View achievements" window are requested from Steam in the panel's language.
+- **Commands and log:** they follow ASF's language. Spanish when ASF runs with a Spanish culture, English otherwise. To get them in Spanish, set `"CurrentCulture": "es-ES"` in `config/ASF.json` (this also changes ASF's own messages).
+- Achievement names stored in a plan (the "Next: …" on the cards and in `!drift status`) keep the language that was active when the plan was created.
 
-| Clave | Por defecto | Descripción |
+## Configuration
+
+Each bot has its own `config/AchievementDrift/<bot>.config.json`. It is edited from the web page (`/drift/`) or through the IPC API, and changes apply **immediately**, without restarting. If you edit the file by hand while ASF is running, the change does not apply until ASF restarts and may be overwritten by the next save from the web, the API or the commands. The configuration only lives in this file (not in ASF's bot JSON).
+
+| Key | Default | Description |
 |---|---|---|
-| `Enabled` | `true` | Activa el plugin para este bot. |
-| `DryRun` | `true` | Simula sin desbloquear nada. Hay que desactivarlo a mano. |
-| `MinDays` | `30` | Días mínimos para completar un juego. |
-| `MaxDays` | `45` | Días máximos (techo del sorteo). Debe ser ≥ `MinDays`. |
-| `ActiveHours` | `"10:00-01:00"` | Franja horaria `HH:mm-HH:mm`; puede cruzar la medianoche. |
-| `TimeZone` | zona del servidor | Identificador IANA (por ejemplo `America/Bogota`). En Docker el contenedor suele estar en UTC: configúralo (el panel web te ofrece la zona de tu navegador). |
-| `MaxActiveGames` | `2` | Juegos en progreso a la vez (1 a 10). |
-| `ExcludeVac` | `true` | Excluye juegos con VAC. |
-| `ExcludeOnline` | `true` | Excluye juegos con categorías online/multijugador. |
-| `Blacklist` | `[]` | Appids excluidos siempre. |
-| `Allowlist` | `[]` | Appids incluidos aunque sean online, no tengan datos de tienda o no muestren logros (salvo que estén en `Blacklist`, o tengan VAC con `ExcludeVac` activado). |
+| `Enabled` | `true` | Enables the plugin for this bot. |
+| `DryRun` | `true` | Simulates without unlocking anything. Must be turned off by hand. |
+| `MinDays` | `30` | Minimum days to complete a game. |
+| `MaxDays` | `45` | Maximum days (upper bound of the draw). Must be ≥ `MinDays`. |
+| `ActiveHours` | `"10:00-01:00"` | Window `HH:mm-HH:mm`; it can cross midnight. |
+| `TimeZone` | server zone | IANA id (for example `America/Bogota`). In Docker the container is usually in UTC: set it (the web panel offers your browser's zone). |
+| `MaxActiveGames` | `2` | Games in progress at once (1 to 10). |
+| `ExcludeVac` | `true` | Excludes VAC games. |
+| `ExcludeOnline` | `true` | Excludes games with online/multiplayer categories. |
+| `Blacklist` | `[]` | Appids that are always excluded. |
+| `Allowlist` | `[]` | Appids included even if they are online, have no store data or show no achievements (unless they are in `Blacklist`, or have VAC with `ExcludeVac` on). |
 
-Los valores inválidos se rechazan (la API responde 400 con un mensaje); si el archivo está corrupto se ignora con un aviso en el log y se usan los valores por defecto. Cambiar `MinDays`/`MaxDays` no regenera planes existentes, solo afecta a planes nuevos.
+Invalid values are rejected (the API answers 400 with a message); a corrupt file is ignored with a warning in the log and the defaults are used. Changing `MinDays`/`MaxDays` does not regenerate existing plans; it only affects new ones.
 
-## Comandos
+## Commands
 
-Requieren permiso `Master` y actúan sobre el bot que recibe el comando.
+They require `Master` permission and act on the bot that receives the command.
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `!drift status` | Progreso por juego, próximo logro y ETA. Termina con la ruta del panel web (`/drift/`). |
-| `!drift on` / `!drift off` | Activa o desactiva el plugin para ese bot (`Enabled`). |
-| `!drift plan <appid>` | Muestra el plan de un juego sin desbloquear nada. |
-| `!drift replan <appid>` | Elimina el plan de un juego; se regenera cuando el juego vuelva a estar activo. |
+| `!drift status` | Progress per game, next achievement and ETA. Ends with the web panel path (`/drift/`). |
+| `!drift on` / `!drift off` | Enables or disables the plugin for that bot (`Enabled`). |
+| `!drift plan <appid>` | Shows a game's plan without unlocking anything. |
+| `!drift replan <appid>` | Deletes a game's plan; it is regenerated when the game is active again. |
 
-## API IPC
+## IPC API
 
-Protegida por el `IPCPassword` de ASF y visible en Swagger. Las respuestas siguen el formato `GenericResponse` de ASF (propiedades en PascalCase).
+Protected by ASF's `IPCPassword` and visible in Swagger. Responses use ASF's `GenericResponse` format (PascalCase properties). Messages follow the `Accept-Language` header (`en` or `es`).
 
-| Método y ruta | Descripción |
+| Method and path | Description |
 |---|---|
-| `GET /Api/Drift/Bots` | Nombres de los bots. |
-| `GET /Api/Drift/{bot}` | Estado: juegos, logros obtenidos/total, % del plan, próximo logro. |
-| `GET /Api/Drift/{bot}/Games/{appid}` | Logros de un juego: estado en vivo en Steam (nombre, descripción, icono, conseguido), % global y estado en el plan (siguiente, programado con fecha estimada, desbloqueado por Drift, protegido, saltado). Se cachea 1 minuto. |
-| `GET /Api/Drift/{bot}/Config` | Configuración del bot. |
-| `PUT /Api/Drift/{bot}/Config` | Guarda la configuración (validada). |
+| `GET /Api/Drift/Bots` | Bot names. |
+| `GET /Api/Drift/{bot}` | Status: games, unlocked/total achievements, % of the plan, next achievement. |
+| `GET /Api/Drift/{bot}/Games/{appid}` | A game's achievements: live Steam state (name, description, icon, unlocked), global % and state in the plan (next, scheduled with estimated date, unlocked by Drift, protected, skipped). Cached for 1 minute. |
+| `GET /Api/Drift/{bot}/Config` | The bot's configuration. |
+| `PUT /Api/Drift/{bot}/Config` | Saves the configuration (validated). |
 
 ```bash
-curl -H "Authentication: <IPCPassword>" https://<tu-asf>/Api/Drift/<bot>
+curl -H "Authentication: <IPCPassword>" https://<your-asf>/Api/Drift/<bot>
 ```
 
-## Archivos que crea
+## Files it creates
 
-Todo se guarda en `config/AchievementDrift/` (nunca en la carpeta del plugin, porque las actualizaciones de plugins la reemplazan):
+Everything is stored in `config/AchievementDrift/` (never in the plugin folder, because plugin updates replace it):
 
-- `<bot>.config.json`: configuración del bot.
-- `<bot>.state.json`: planes y progreso del bot.
-- `store-cache.json`: datos de la tienda (nombre, VAC, categorías) por appid.
+- `<bot>.config.json`: the bot's configuration.
+- `<bot>.state.json`: the bot's plans and progress.
+- `store-cache.json`: store data (name, VAC, categories) per appid.
 
-Para **reiniciar el progreso** de un bot: detén ASF y borra su `<bot>.state.json`.
+To **reset a bot's progress**: stop ASF and delete its `<bot>.state.json`.
 
-## Preguntas frecuentes
+## FAQ
 
-**¿Por qué no avanza?** Revisa que: (1) estés dentro del horario `ActiveHours` y de la zona `TimeZone`; (2) el juego no esté excluido (VAC, online o `Blacklist`); (3) el juego esté en `GamesPlayedWhileIdle` o se esté farmeando; (4) no haya ya `MaxActiveGames` juegos ocupando los huecos; (5) `Enabled` sea `true` y el bot esté conectado.
+**Why is it not progressing?** Check that: (1) you are within `ActiveHours` in the `TimeZone` zone; (2) the game is not excluded (VAC, online or `Blacklist`); (3) the game is in `GamesPlayedWhileIdle` or being farmed; (4) there are not already `MaxActiveGames` games taking the slots; (5) `Enabled` is `true` and the bot is connected.
 
-**¿Funciona si uso `!play`?** No. ASF no guarda qué juegos se le piden con `!play`, así que el plugin no puede detectarlos. Usa `GamesPlayedWhileIdle`.
+**Does it work with `!play`?** No. ASF does not store which games are requested with `!play`, so the plugin cannot detect them. Use `GamesPlayedWhileIdle`.
 
-**¿Por qué se excluyó un juego?** El log indica el motivo con una línea `[AchievementDrift] Se excluye ...`. Puedes forzar su inclusión con `Allowlist` (no sirve para juegos con VAC mientras `ExcludeVac` esté activado) o excluirlo siempre con `Blacklist`.
+**Why was a game excluded?** The log tells you the reason with an `[AchievementDrift] Excluding ...` line. You can force it in with `Allowlist` (not for VAC games while `ExcludeVac` is on) or always exclude it with `Blacklist`.
 
-**¿Qué pasa con los logros protegidos?** Se saltan: nunca entran al plan. Si Steam rechaza un desbloqueo, ese logro se marca como saltado y se registra un aviso. Los errores temporales de Steam (ocupado, no disponible, límite de peticiones, sin conexión…) no lo saltan: se reintenta más tarde.
+**What about protected achievements?** They are skipped: they never enter the plan. If Steam rejects an unlock, that achievement is marked as skipped and a warning is logged. Temporary Steam errors (busy, unavailable, rate limited, no connection…) do not skip it: it is retried later.
 
-**Cambié el horario y ahora va más rápido.** Los planes se miden en minutos activos. Ampliar el horario acelera el calendario (más minutos activos por día); reducirlo lo alarga.
+**I changed the active hours and now it goes faster.** Plans are measured in active minutes. Widening the window speeds up the calendar (more active minutes per day); narrowing it slows it down.
 
-**La página `/drift` me lleva al panel de ASF o da 404.** La URL debe terminar con barra: `https://<tu-asf>/drift/`.
+**The `/drift` page takes me to the ASF panel or returns 404.** The URL must end with a slash: `https://<your-asf>/drift/`.
 
-**El plugin no carga, veo `MissingMethodException` o el aviso «Tu build de ASF parece recortada».** Las builds de ASF por sistema operativo (`linux-x64`, `win-x64`…) están recortadas. Usa la build `generic` o la imagen oficial de Docker.
+**Is there a button in the ASF panel to open it?** No: ASF-ui is ASF's official interface and plugins cannot add buttons to it. Bookmark `https://<your-asf>/drift/`; from the plugin page, **← ASF** takes you back.
 
-## Compilar desde el código
+**The plugin does not load, I see `MissingMethodException`/`TypeLoadException` or the "Your ASF build looks trimmed" warning.** The OS-specific ASF builds and the official Docker image are trimmed. Use the `generic` build (with Docker, see [Docker](#docker)).
+
+## Building from source
 
 ```bash
 git clone --recursive https://github.com/owenunda/ASF-AchievementDrift.git
@@ -151,8 +189,8 @@ dotnet test AchievementDrift.Tests
 dotnet publish AchievementDrift -c Release -o out
 ```
 
-Más detalles en [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+More details (in Spanish) in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Licencia
+## License
 
 [Apache-2.0](LICENSE.txt).
