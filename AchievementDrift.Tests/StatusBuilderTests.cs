@@ -76,6 +76,20 @@ public sealed class StatusBuilderTests {
 	}
 
 	[TestMethod]
+	public void TextEndsWithPanelPath() {
+		string withGames = StatusBuilder.FormatText(StatusBuilder.Build("manticora", true, new DriftConfig(), AlwaysOn, SampleState(), Now));
+		string empty = StatusBuilder.FormatText(StatusBuilder.Build("manticora", true, new DriftConfig(), AlwaysOn, new BotState(), Now));
+
+		foreach (string text in new[] { withGames, empty }) {
+			string lastLine = text.Split('\n')[^1];
+
+			StringAssert.Contains(lastLine, StatusBuilder.PanelPath);
+		}
+
+		Assert.AreEqual("/drift/", StatusBuilder.PanelPath);
+	}
+
+	[TestMethod]
 	public void PlanTextListsEntries() {
 		string text = StatusBuilder.FormatPlan(SampleState().Plans[1]);
 

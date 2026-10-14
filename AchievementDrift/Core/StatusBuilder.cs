@@ -7,6 +7,9 @@ using System.Text;
 namespace AchievementDrift.Core;
 
 internal static class StatusBuilder {
+	// Ruta del panel web (IWebInterface.WebPath + barra final: sin ella ASF-ui intercepta la URL)
+	internal const string PanelPath = "/drift/";
+
 	internal const string StateActive = "Active";
 	internal const string StateCompleted = "Completed";
 	internal const string StatePaused = "Paused";
@@ -53,7 +56,8 @@ internal static class StatusBuilder {
 		text.AppendLine(CultureInfo.InvariantCulture, $"AchievementDrift: {(status.Enabled ? "activado" : "desactivado")}{(status.DryRun ? " · DryRun (simulación)" : "")} · horario {status.ActiveHours} ({status.TimeZone}) · {(status.InActiveWindow ? "dentro" : "fuera")} del horario");
 
 		if (status.Games.Count == 0) {
-			text.Append("Todavía no hay planes. Se crean cuando el bot juega un juego elegible dentro del horario.");
+			text.AppendLine("Todavía no hay planes. Se crean cuando el bot juega un juego elegible dentro del horario.");
+			text.Append(PanelLine);
 
 			return text.ToString();
 		}
@@ -78,8 +82,12 @@ internal static class StatusBuilder {
 			text.AppendLine();
 		}
 
-		return text.ToString().TrimEnd();
+		text.Append(PanelLine);
+
+		return text.ToString();
 	}
+
+	private const string PanelLine = $"Panel web: {PanelPath} (añádelo a la dirección de tu ASF, con la barra final)";
 
 	private static GameStatus BuildGame(GamePlan plan, bool isActive, ActiveWindow window, DateTime nowUtc) {
 		string state = plan.IsCompleted ? StateCompleted : isActive ? StateActive : StatePaused;

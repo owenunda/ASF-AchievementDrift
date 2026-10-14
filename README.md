@@ -95,7 +95,7 @@ Requieren permiso `Master` y actúan sobre el bot que recibe el comando.
 
 | Comando | Qué hace |
 |---|---|
-| `!drift status` | Progreso por juego, próximo logro y ETA. |
+| `!drift status` | Progreso por juego, próximo logro y ETA. Termina con la ruta del panel web (`/drift/`). |
 | `!drift on` / `!drift off` | Activa o desactiva el plugin para ese bot (`Enabled`). |
 | `!drift plan <appid>` | Muestra el plan de un juego sin desbloquear nada. |
 | `!drift replan <appid>` | Elimina el plan de un juego; se regenera cuando el juego vuelva a estar activo. |
