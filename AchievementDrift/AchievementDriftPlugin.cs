@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using AchievementDrift.Commands;
 using AchievementDrift.Runtime;
 using AchievementDrift.Steam;
 using ArchiSteamFarm.Core;
@@ -13,7 +14,7 @@ namespace AchievementDrift;
 
 #pragma warning disable CA1812 // ASF uses this class during runtime
 [UsedImplicitly]
-internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotConnection, IBotSteamClient, IWebInterface {
+internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotCommand2, IBotConnection, IBotSteamClient, IWebInterface {
 	internal const string PluginName = "AchievementDrift";
 
 	public string Name => PluginName;
@@ -21,6 +22,8 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 	public string RepositoryName => "owenunda/ASF-AchievementDrift";
 	public Version Version => typeof(AchievementDriftPlugin).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
 	public string WebPath => "/drift";
+
+	public Task<string?> OnBotCommand(Bot bot, EAccess access, string message, string[] args, ulong steamID = 0) => DriftCommands.HandleAsync(bot, access, args);
 
 	public Task OnBotDestroy(Bot bot) => DriftRuntime.UnregisterAsync(bot);
 
