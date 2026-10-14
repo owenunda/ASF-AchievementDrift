@@ -1,0 +1,66 @@
+name: Plugin-auto-release
+
+# Publicar una versión = subir <Version> en Directory.Build.props y hacer push a main.
+# Este workflow crea el tag con ese número (si no existe) y lanza publish.yml sobre él.
+# Los eventos creados con GITHUB_TOKEN no disparan otros workflows, salvo workflow_dispatch: por eso se lanza publish.yml explícitamente.
+
+on:
+  push:
+    branches: [main]
+    paths: [Directory.Build.props]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        show-progress: false
+
+    - name: Read plugin version
+      id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        version="$(grep -oPm1 '(?<=<Version>)[^<]+' Directory.Build.props)"
+
+        if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::<Version> '$version' no tiene el formato X.Y.Z.W"
+            exit 1
+        fi
+
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Create tag and trigger publish
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        set -euo pipefail
+
+        if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null; then
+            echo "El tag ${VERSION} ya existe: no se publica nada."
+            exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -a "${VERSION}" -m "AchievementDrift ${VERSION}"
+        git push origin "refs/tags/${VERSION}"
+
+        gh workflow run publish.yml --ref "${VERSION}"
+        echo "Tag ${VERSION} creado; publish.yml lanzado."

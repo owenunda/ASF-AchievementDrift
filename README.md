@@ -108,6 +108,7 @@ Protegida por el `IPCPassword` de ASF y visible en Swagger. Las respuestas sigue
 |---|---|
 | `GET /Api/Drift/Bots` | Nombres de los bots. |
 | `GET /Api/Drift/{bot}` | Estado: juegos, logros obtenidos/total, % del plan, próximo logro. |
+| `GET /Api/Drift/{bot}/Games/{appid}` | Logros de un juego: estado en vivo en Steam (nombre, descripción, icono, conseguido), % global y estado en el plan (siguiente, programado con fecha estimada, desbloqueado por Drift, protegido, saltado). Se cachea 1 minuto. |
 | `GET /Api/Drift/{bot}/Config` | Configuración del bot. |
 | `PUT /Api/Drift/{bot}/Config` | Guarda la configuración (validada). |
 

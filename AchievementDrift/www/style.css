@@ -79,7 +79,7 @@ dialog#achievements-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
 .ach { position: relative; display: grid; grid-template-columns: 22px 48px 1fr auto; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 6px; background: linear-gradient(90deg, rgb(127 127 127 / 0.14) var(--pct), rgb(127 127 127 / 0.05) var(--pct)); }
 .ach-check { color: var(--ok); font-weight: 700; text-align: center; }
 .ach-icon { width: 48px; height: 48px; border-radius: 4px; object-fit: cover; }
-.ach-icon.placeholder { display: flex; align-items: center; justify-content: center; background: var(--border); font-size: 22px; }
+.ach-icon.placeholder { display: block; background: linear-gradient(135deg, var(--border), var(--card)); border: 1px solid var(--border); }
 .ach:not(.unlocked) .ach-icon { opacity: 0.75; }
 .ach-text { min-width: 0; display: grid; gap: 2px; justify-items: start; }
 .ach-name { font-weight: 600; }

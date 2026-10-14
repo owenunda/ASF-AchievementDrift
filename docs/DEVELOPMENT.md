@@ -137,13 +137,15 @@ En Release el análisis estricto de ASF convierte los warnings en errores; compi
 
 ## 5. Publicar una versión
 
-1. Sube `<Version>` en `Directory.Build.props` (formato `X.Y.Z.W`).
-2. Haz commit.
-3. Crea el tag `git tag X.Y.Z.W`; **debe coincidir con `Version`**.
-4. `git push --tags`.
-5. El workflow `.github/workflows/publish.yml` compila, genera `AchievementDrift.zip` y crea el release usando `.github/RELEASE_TEMPLATE.md` como cuerpo. Lo publica directamente como **estable** y lo marca como **«latest»** (`prerelease: false`, `makeLatest: true`), así que aparece como la última versión en GitHub y ASF (canal `Stable`, que consulta `/releases/latest`) lo ve de inmediato.
-   - Por eso, **prueba antes de crear el tag**: instala el resultado de `dotnet publish` en un ASF de prueba (con `DryRun = true`) y comprueba que carga y funciona.
+1. Sube `<Version>` en `Directory.Build.props` (formato `X.Y.Z.W`) y haz commit.
+2. `git push` a `main`.
+3. El workflow `.github/workflows/auto-release.yml` detecta el cambio en `Directory.Build.props`. Si todavía no existe un tag con ese número, lo crea (`X.Y.Z.W`) y lanza `.github/workflows/publish.yml` sobre él (con `workflow_dispatch`, porque los tags creados con `GITHUB_TOKEN` no disparan otros workflows). Si el tag ya existe, no hace nada.
+   - Sigue funcionando el camino manual: crear y subir tú el tag (`git tag -a X.Y.Z.W -m ...` + `git push origin X.Y.Z.W`) dispara `publish.yml` directamente.
+4. `publish.yml` compila, genera `AchievementDrift.zip` y crea el release usando `.github/RELEASE_TEMPLATE.md` como cuerpo. Lo publica directamente como **estable** y lo marca como **«latest»** (`prerelease: false`, `makeLatest: true`), así que aparece como la última versión en GitHub y ASF (canal `Stable`, que consulta `/releases/latest`) lo ve de inmediato.
+   - Por eso, **prueba antes de subir la versión**: instala el resultado de `dotnet publish` en un ASF de prueba (con `DryRun = true`) y comprueba que carga y funciona.
    - Si quieres publicar una versión de prueba, edita el release en GitHub y marca «Set as a pre-release»: solo la verán las instancias de ASF con `UpdateChannel` = `PreRelease`.
+5. Elegir el número de versión es manual a propósito: publicar en cada push generaría un release por cada cambio pequeño.
+
 6. La actualización automática además depende de la configuración global de ASF (`ASF.json`): `PluginsUpdateMode` (`Whitelist` por defecto) y `PluginsUpdateList` (vacía por defecto). Con esos valores ningún plugin se actualiza solo: el usuario debe añadir `AchievementDrift` (el nombre del ensamblado) a `PluginsUpdateList` en modo `Whitelist`, o usar el modo `Blacklist` (se actualizan todos los plugins que no estén en la lista).
 7. Con el plugin habilitado para actualizaciones, ASF lo actualiza por su cuenta gracias a `IGitHubPluginUpdates` (`RepositoryName = "owenunda/ASF-AchievementDrift"`).
 

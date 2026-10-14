@@ -53,7 +53,7 @@ function renderAchievements() {
 		const percent = achievement.GlobalPercent === null ? null : Math.max(0, Math.min(100, achievement.GlobalPercent));
 		const icon = achievement.IconUrl
 			? `<img class="ach-icon" src="${escapeHtml(achievement.IconUrl)}" alt="" loading="lazy">`
-			: "<span class=\"ach-icon placeholder\">🏆</span>";
+			: "<span class=\"ach-icon placeholder\" aria-hidden=\"true\"></span>";
 
 		return `<li class="ach${achievement.Unlocked ? " unlocked" : ""}" style="--pct:${percent ?? 0}%">
 			<span class="ach-check" aria-label="${achievement.Unlocked ? "Conseguido" : "Pendiente"}">${achievement.Unlocked ? "✓" : ""}</span>
@@ -138,6 +138,16 @@ function initAchievementsDialog() {
 			openAchievements(button.dataset.appid);
 		}
 	});
+
+	// Un icono que no carga se sustituye por el cuadro neutro ("error" no burbujea: fase de captura)
+	document.getElementById("dlg-list").addEventListener("error", (event) => {
+		if (event.target instanceof HTMLImageElement && event.target.classList.contains("ach-icon")) {
+			const placeholder = document.createElement("span");
+			placeholder.className = "ach-icon placeholder";
+			placeholder.setAttribute("aria-hidden", "true");
+			event.target.replaceWith(placeholder);
+		}
+	}, true);
 
 	document.getElementById("dlg-close").addEventListener("click", () => dialog.close());
 
