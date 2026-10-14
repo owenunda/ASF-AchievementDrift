@@ -11,7 +11,7 @@ Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que
 ## Qué hace
 
 - Los logros con menor % global de obtención tardan más y tienden a salir **al final**.
-- Cada juego tarda **como mínimo `MinDays` días de calendario** (30 por defecto) en completarse.
+- Cada juego tarda **como mínimo `MinDays` días de calendario** (30 por defecto) en completarse, mientras no amplíes el horario activo después de crear su plan (ver preguntas frecuentes).
 - El orden y los tiempos de desbloqueo son **aleatorios**.
 - Solo avanza en juegos que el bot **está jugando en ese momento** (`GamesPlayedWhileIdle` o el farmeo de cromos). Si un juego deja de jugarse, su progreso se pausa.
 - Solo desbloquea dentro de un **horario humano** configurable, en tu zona horaria.
@@ -24,13 +24,15 @@ Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que
 El plan de un juego se crea la primera vez que un juego elegible aparece en reproducción:
 
 1. **Candidatos:** los logros no desbloqueados y no protegidos, cada uno con su % global de obtención `p` (acotado a `[0,1 ; 100]`; si Steam no lo da se usa 50).
-2. **Presupuesto:** `T = aleatorio(MinDays, MaxDays) × minutos de franja por día × (pendientes / total)`. En un día de calendario no caben más minutos activos que los de la franja, así que un juego empezado desde cero nunca se completa antes de `MinDays` días.
+2. **Presupuesto:** `T = aleatorio(MinDays, MaxDays) × minutos de franja por día × (pendientes / total)`. En un día de calendario no caben más minutos activos que los de la franja, así que un juego empezado desde cero no se completa antes de `MinDays` días mientras no se amplíe el horario `ActiveHours` después de crear el plan (el plan se mide en minutos activos: ampliar la franja da más minutos por día).
 3. **Orden:** cada logro recibe la clave `k = U^(1/p)` con `U` uniforme en `(0,1)` y se ordena por `k` descendente (muestreo ponderado). Los comunes tienden a salir antes y los raros al final.
 4. **Espaciado:** el hueco previo de cada logro es `(1/√p) × aleatorio(0,5 ; 1,5)`. Los huecos se escalan para que sumen `T`, con un mínimo de 15 minutos activos entre logros.
 
 **Ejemplo:** horario `10:00-01:00` (15 h = 900 minutos al día), `MinDays = 30` y `MaxDays = 45`. El presupuesto de un juego nuevo está entre 30 × 900 = **27 000** y 45 × 900 = **40 500** minutos activos. Un logro del 2 % espera en promedio unas 6 veces más que uno del 80 % (`√(80/2) ≈ 6,3`), y el del 2 % sale después del del 80 % en aproximadamente el 97 % de los planes.
 
-Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progreso y desbloquea, como máximo, **un logro por tick y por bot**: el pendiente más antiguo cuyo momento ya llegó.
+Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progreso y desbloquea, como máximo, **un logro por tick y por bot**: el pendiente más antiguo cuyo momento ya llegó. Aunque se acumulen varios logros vencidos (por ejemplo tras una pausa), un mismo juego nunca desbloquea dos logros con menos de 15 minutos activos de diferencia.
+
+Si Steam falla con un juego (no responde, da un error temporal o no se puede crear su plan), ese juego deja su hueco a otro y se reintenta pasados 30 minutos; los demás juegos siguen avanzando. Si el mismo logro falla 5 veces seguidas, se salta. Si no se pueden obtener los porcentajes globales tras 3 intentos, el plan se crea suponiendo un 50 % para cada logro.
 
 ## Requisitos
 
@@ -45,7 +47,7 @@ Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progre
 3. Reinicia ASF.
 4. Comprueba en el log la línea `AchievementDrift ... cargado` y que el plugin aparece en la pestaña **Plugins** del panel de ASF.
 
-**Docker:** copia o monta la carpeta extraída en `/app/plugins/AchievementDrift`. Para que la configuración y el progreso sobrevivan a recrear el contenedor, asegúrate de que `/app/config` también es persistente.
+**Docker:** copia o monta la carpeta extraída en `/app/plugins/AchievementDrift`. Para que la configuración y el progreso sobrevivan a recrear el contenedor, asegúrate de que `/app/config` también es persistente. Los contenedores suelen ejecutarse en **UTC**: configura `TimeZone` con tu zona (el panel `/drift/` detecta la de tu navegador y te ofrece usarla); si no, el horario activo se aplicará en hora UTC.
 
 ## Actualizaciones automáticas
 
@@ -69,7 +71,7 @@ Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases
 
 ## Configuración
 
-Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita desde la página web (`/drift/`) o por la API IPC, y los cambios se aplican **en caliente**, sin reiniciar. La configuración vive solo en este archivo (no en el JSON del bot de ASF).
+Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita desde la página web (`/drift/`) o por la API IPC, y los cambios se aplican **en caliente**, sin reiniciar. Si editas el archivo a mano con ASF en marcha, el cambio no se aplica hasta reiniciar ASF y puede sobrescribirse con el siguiente guardado desde la web, la API o los comandos. La configuración vive solo en este archivo (no en el JSON del bot de ASF).
 
 | Clave | Por defecto | Descripción |
 |---|---|---|
@@ -78,7 +80,7 @@ Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita 
 | `MinDays` | `30` | Días mínimos para completar un juego. |
 | `MaxDays` | `45` | Días máximos (techo del sorteo). Debe ser ≥ `MinDays`. |
 | `ActiveHours` | `"10:00-01:00"` | Franja horaria `HH:mm-HH:mm`; puede cruzar la medianoche. |
-| `TimeZone` | zona del servidor | Identificador IANA (por ejemplo `America/Bogota`). |
+| `TimeZone` | zona del servidor | Identificador IANA (por ejemplo `America/Bogota`). En Docker el contenedor suele estar en UTC: configúralo (el panel web te ofrece la zona de tu navegador). |
 | `MaxActiveGames` | `2` | Juegos en progreso a la vez (1 a 10). |
 | `ExcludeVac` | `true` | Excluye juegos con VAC. |
 | `ExcludeOnline` | `true` | Excluye juegos con categorías online/multijugador. |
@@ -131,7 +133,7 @@ Para **reiniciar el progreso** de un bot: detén ASF y borra su `<bot>.state.jso
 
 **¿Por qué se excluyó un juego?** El log indica el motivo con una línea `[AchievementDrift] Se excluye ...`. Puedes forzar su inclusión con `Allowlist` (no sirve para juegos con VAC mientras `ExcludeVac` esté activado) o excluirlo siempre con `Blacklist`.
 
-**¿Qué pasa con los logros protegidos?** Se saltan: nunca entran al plan. Si Steam rechaza un desbloqueo, ese logro se marca como saltado y se registra un aviso.
+**¿Qué pasa con los logros protegidos?** Se saltan: nunca entran al plan. Si Steam rechaza un desbloqueo, ese logro se marca como saltado y se registra un aviso. Los errores temporales de Steam (ocupado, no disponible, límite de peticiones, sin conexión…) no lo saltan: se reintenta más tarde.
 
 **Cambié el horario y ahora va más rápido.** Los planes se miden en minutos activos. Ampliar el horario acelera el calendario (más minutos activos por día); reducirlo lo alarga.
 

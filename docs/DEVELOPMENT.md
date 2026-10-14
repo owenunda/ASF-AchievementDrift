@@ -18,8 +18,8 @@ Dos proyectos .NET (`net10.0`) basados en `JustArchiNET/ASF-PluginTemplate`, con
 | `SchemaParser` | Interpreta el esquema binario (KeyValues): nombre API, nombre visible, bit, protección y dependencias de progreso. | `Steam/SchemaParser.cs` |
 | `WebApis` | Porcentajes globales (`GetGlobalAchievementPercentagesForApp/v2`, sin API key) y datos de tienda (`appdetails`). | `Steam/WebApis.cs` |
 | `PercentCache` | Cache en memoria (24 h) de los porcentajes globales por appid. | `Storage/PercentCache.cs` |
-| `StoreCache` | Cache persistente por appid de los datos de tienda (`store-cache.json`). | `Storage/StoreCache.cs` |
-| `ConfigStore` | Configuración por bot (`<bot>.config.json`); única fuente de configuración, con cambios en caliente y validación. | `Storage/ConfigStore.cs` |
+| `StoreCache` | Cache persistente por appid de los datos de tienda (`store-cache.json`); los fallos de red se recuerdan 30 minutos en memoria. | `Storage/StoreCache.cs` |
+| `ConfigStore` | Configuración por bot (`<bot>.config.json`); única fuente de configuración, con validación y cache en memoria (los cambios por web/IPC/comandos se aplican al instante). | `Storage/ConfigStore.cs` |
 | `JsonFileStore` | Lectura/escritura JSON atómica en `config/AchievementDrift/`. | `Storage/JsonFileStore.cs` |
 | `SafetyRules` | **Lógica pura.** Decide si un appid es elegible (Blacklist, Allowlist, VAC, online, sin logros, sin datos). | `Core/SafetyRules.cs` |
 | `PlanGenerator` | **Lógica pura.** Crea y amplía planes (presupuesto, orden ponderado, espaciado). | `Core/PlanGenerator.cs` |
@@ -27,21 +27,22 @@ Dos proyectos .NET (`net10.0`) basados en `JustArchiNET/ASF-PluginTemplate`, con
 | `DriftEngine` | **Lógica pura.** Un tick: huecos de juegos activos, minutos activos, siguiente desbloqueo. | `Core/DriftEngine.cs` |
 | `StatusBuilder` | Construye el estado (`DriftStatus`) y su formato de texto para `!drift status` y la IPC. | `Core/StatusBuilder.cs` |
 | `BotRunner` | Un temporizador de 1 minuto por bot conectado; orquesta lectura de juegos, motor, creación de planes, desbloqueo y guardado. | `Runtime/BotRunner.cs` |
-| `DriftRuntime` | Registro estático de runners, handlers y almacenes. | `Runtime/DriftRuntime.cs` |
+| `DriftRuntime` | Registro estático de runners, handlers y almacenes; serializa arranque/parada de runners por bot. | `Runtime/DriftRuntime.cs` |
+| `RuntimeSelfTest` | Al cargar, comprueba que existen los miembros de la BCL que usa el plugin (detecta builds de ASF recortadas). | `Runtime/RuntimeSelfTest.cs` |
 | `DriftCommands` | Comandos `!drift ...` (permiso `Master`). | `Commands/DriftCommands.cs` |
 | `DriftController` | Endpoints IPC (`ArchiController`). | `IPC/DriftController.cs` |
 | `www/` | Página `/drift/`: estado, configuración y ayuda (HTML/CSS/JS sin dependencias externas). | `www/` |
 
-El motor es puro y testeable: `DriftEngine.Tick` no toca Steam ni el disco; recibe el estado, la hora, los juegos elegibles en reproducción y la configuración, y devuelve qué hay que crear/desbloquear. Los efectos secundarios viven en `BotRunner`.
+El motor es puro y testeable: `DriftEngine.Tick` no toca Steam ni el disco; recibe el estado, la hora, los juegos elegibles en reproducción, los juegos en espera por errores y la configuración, y devuelve qué hay que crear/desbloquear. Los efectos secundarios viven en `BotRunner`.
 
 ### Flujo de un tick (cada minuto, por bot)
 
 1. `BotRunner.TickAsync` toma el candado del estado y comprueba que el bot sigue conectado.
 2. **Lectura de juegos:** si `CardsFarmer.NowFarming`, los juegos del farmeo; si no y `IsPlayingPossible`, `GamesPlayedWhileIdle`.
 3. **`SafetyRules`:** cada juego se evalúa (consultando `StoreCache` si hace falta) y solo pasan los elegibles. Un fallo en un juego se registra y se trata como no elegible en ese tick.
-4. **`DriftEngine.Tick`:** descarta planes creados en DryRun si ya no estamos en DryRun, comprueba `Enabled` y la franja horaria, libera/rellena huecos (`MaxActiveGames`), suma un minuto activo a cada juego activo con plan y devuelve los juegos que necesitan plan y, como máximo, un desbloqueo vencido.
-5. **Crear planes:** para cada juego sin plan se lee el esquema (`StatsHandler`) y los porcentajes (`PercentCache`) y se llama a `PlanGenerator.Create`.
-6. **Desbloquear:** en DryRun se registra `[AchievementDrift][DryRun] Desbloquearía ...` y la entrada pasa a `Simulated`; en modo real se sincroniza el plan con Steam (logros hechos fuera, logros nuevos), se valida que el logro exista y no sea protegido y se envía `ClientStoreUserStats2`.
+4. **`DriftEngine.Tick`:** descarta los planes con simulaciones si ya no estamos en DryRun, comprueba `Enabled` y la franja horaria, libera/rellena huecos (`MaxActiveGames`; los juegos en espera no ocupan hueco), suma un minuto activo a cada juego activo con plan y devuelve los juegos que necesitan plan y, como máximo, un desbloqueo vencido de un juego que no esté en espera ni haya desbloqueado hace menos de 15 minutos activos.
+5. **Crear planes:** para cada juego sin plan se lee el esquema (`StatsHandler`) y los porcentajes (`PercentCache`) y se llama a `PlanGenerator.Create`. Si falla, el juego entra en espera 30 minutos.
+6. **Desbloquear:** en DryRun se registra `[AchievementDrift][DryRun] Desbloquearía ...` y la entrada pasa a `Simulated`; en modo real se sincroniza el plan con Steam (logros hechos fuera, logros nuevos), se valida que el logro exista y no sea protegido y se envía `ClientStoreUserStats2`. Si Steam no responde o da un error temporal, el juego entra en espera 30 minutos.
 7. **Guardar:** si algo cambió, se escribe `<bot>.state.json`.
 
 Todos los mensajes del log llevan el prefijo `[AchievementDrift]` (y `[AchievementDrift][DryRun]` las simulaciones).
@@ -93,23 +94,26 @@ Hallazgos del código de ASF que condicionan el diseño.
 ### Build
 - Target `net10.0`; `Directory.Build.props` de ASF activa `AnalysisMode=AllEnabledByDefault` y
   `TreatWarningsAsErrors` en Release. El código sigue el estilo de ASF (`ConfigureAwait(false)`, cultura invariante).
-- Las builds por SO de ASF (como `linux-x64`) se publican con `PublishTrimmed=true`.
+- Las builds por SO de ASF (como `linux-x64`) se publican con `PublishTrimmed=true` (`TrimMode=partial`): pueden faltar miembros de la BCL que ASF no usa (`Enumerable.MinBy`, `TimeOnly.IsBetween`, `TimeZoneInfo.FindSystemTimeZoneById`…). La imagen oficial de Docker (`Dockerfile`) se publica dependiente del framework (`--no-self-contained`), sin recorte.
 - La plantilla oficial ya apunta el submódulo de ASF a `6.3.10.5`.
 
 ## 3. Decisiones
 
 - **MSTest en lugar de xUnit.** ASF ya fija la versión de MSTest en su central package management; usar lo mismo evita conflictos de versiones.
-- **Configuración solo en el plugin.** Vive en `config/AchievementDrift/<bot>.config.json` y no en el JSON del bot de ASF, para tener una única fuente editable desde la web, la IPC y el disco, con cambios en caliente.
+- **Configuración solo en el plugin.** Vive en `config/AchievementDrift/<bot>.config.json` y no en el JSON del bot de ASF, para tener una única fuente editable desde la web, la IPC y los comandos, con cambios al instante. `ConfigStore` cachea la configuración en memoria: editar el archivo en disco con ASF en marcha **no** se aplica (hace falta reiniciar ASF) y el siguiente guardado desde la web/IPC/comandos lo sobrescribe.
 - **`!play` no soportado.** ASF no guarda qué juegos se le pasan (ver §2), así que no hay forma fiable de saber qué se está jugando.
 - **Estado `Simulated` y regeneración al salir de DryRun.** En DryRun el desbloqueo no se envía: la entrada pasa a `Simulated`. Mientras dura el DryRun, el estado (`status`/web) muestra las entradas `Simulated` como hechas para que se vea el avance simulado, pero en Steam no se ha obtenido nada. Los planes se marcan con `CreatedInDryRun`; al desactivar `DryRun`, `DriftEngine` descarta esos planes **y también cualquier plan creado en modo real que tenga al menos una entrada `Simulated`** (caso real → DryRun → real), y se regeneran desde el estado real de Steam con un presupuesto proporcional a lo que falta.
 - **Logros desbloqueados fuera del plugin** se marcan `Unlocked` al sincronizar el plan con Steam (justo antes de cada desbloqueo real). Los logros nuevos del juego se añaden al final del plan con presupuesto proporcional.
-- **Un fallo de Steam al desbloquear** (rechazo) marca la entrada `Skipped`; un error de red la deja pendiente para el siguiente tick.
-- **Errores aislados por juego en cada tick.** Una excepción al evaluar un juego, crear su plan o desbloquear un logro se registra y no afecta a otros juegos ni al resto del tick; un juego sin plan por error se reintenta pasados 30 minutos (`PlanRetryDelay`). Una excepción no controlada del tick se registra y el temporizador sigue.
+- **Un fallo de Steam al desbloquear** (rechazo) marca la entrada `Skipped`. Los `EResult` transitorios (`Busy`, `ServiceUnavailable`, `Timeout`, `RateLimitExceeded`, `TryAnotherCM`, `NoConnection`) y los errores de red/timeout no la saltan: `StatsHandler.UnlockAsync` devuelve `null` y se reintenta (ver siguiente punto). `Fail` y el resto cuentan como rechazo.
+- **Errores aislados por juego en cada tick (espera por juego).** Una excepción al evaluar un juego se registra y lo trata como no elegible en ese tick. Si falla la creación del plan o el camino de desbloqueo (`GetAsync`/`UnlockAsync` sin respuesta o con excepción), `BotRunner` pone el juego **en espera 30 minutos** (`RetryDelay`) y pasa ese conjunto a `DriftEngine.Tick`: un juego en espera libera su hueco (su plan queda en pausa, sin sumar minutos) y nunca se devuelve como desbloqueo, así un juego atascado no bloquea a los demás. Tras 5 fallos seguidos del mismo logro, este se marca `Skipped` con un aviso. Si no se pueden obtener los porcentajes globales al crear un plan, se reintenta (con espera) hasta 3 veces; al tercer fallo seguido se crea el plan con `NaN` (50 % vía `NormalizePercent`, spec §3.1). Los contadores y esperas viven solo en memoria (se reinician con el runner o con `replan`). Una excepción no controlada del tick se registra y el temporizador sigue.
 - **Datos en `config/AchievementDrift/`:** `<bot>.config.json`, `<bot>.state.json` y `store-cache.json` (compartido por todos los bots). Nunca en la carpeta del plugin.
 - **`DriftController` resuelve el bot desde el registro de ASF antes de tocar archivos.** `FindBot` obtiene el bot con `Bot.GetBot` y devuelve la instancia del registro interno (`Bot.BotsReadOnly`), de modo que el nombre que llega a las rutas de archivo nunca deriva directamente del texto de la petición (regla CA3003, path injection).
 - **Exclusiones adicionales a las del spec.** `SafetyRules` también excluye juegos sin datos de tienda y juegos sin la categoría de logros (id 22), salvo que estén en `Allowlist`.
 - **VAC gana a Allowlist (decisión de la revisión final).** Orden de `SafetyRules.Evaluate`: Blacklist → VAC (si hay datos de tienda, `ExcludeVac` y categoría 8) → Allowlist → sin datos → online → sin logros → elegible. Por eso `NeedsStoreInfo` devuelve `true` para juegos en Allowlist cuando `ExcludeVac` está activado (hay que consultar la tienda para ver el VAC) y `false` solo para juegos en Blacklist o en Allowlist con `ExcludeVac=false`. Un juego en Allowlist sin datos de tienda sigue siendo elegible.
-- **Concurrencia.** Cada `BotRunner` serializa tick, consultas de estado y `replan` con un `SemaphoreSlim`; un tick que no logra el candado en 30 s se omite.
+- **Hueco mínimo por juego entre desbloqueos.** `GamePlan.LastUnlockActiveMinutes` (persistido; `null` = ninguno) guarda los minutos activos del plan en el último desbloqueo real o simulado (`DriftEngine.RecordUnlock`). `FindDue` salta los juegos con `ActiveMinutes - LastUnlockActiveMinutes < PlanGenerator.MinGapMinutes` (15): aunque se acumulen varios logros vencidos (pausas, cambios de horario), un juego no desbloquea en ráfaga. Los logros que Steam ya marca como hechos al sincronizar no cuentan.
+- **Detección de builds recortadas.** `RuntimeSelfTest.Run` (desde `OnLoaded`) ejecuta una vez cada API sensible de la BCL dentro de su propia lambda con `try/catch` (el `MissingMethodException` se lanza al compilar con JIT el método que usa el miembro, por eso cada prueba va en un método aparte) y, si alguna falla, registra un error en español pidiendo la build `generic` o la imagen oficial de Docker.
+- **Concurrencia.** Cada `BotRunner` serializa tick, consultas de estado y `replan` con un `SemaphoreSlim`; un tick que no logra el candado en 30 s se omite. `DriftRuntime` serializa `StartAsync`/`StopAsync` por bot (un `SemaphoreSlim` por nombre de bot) para que un logon y una desconexión solapados no dejen un runner huérfano. `BotRunner.DisposeAsync` desecha el temporizador, espera a que termine el tick en curso y marca el runner como desechado: desde entonces no guarda ni hace `replan`, así no pisa el estado que cargue el runner nuevo. No retiene el candado para no colgar consultas de estado que aún tengan una referencia al runner viejo.
+- **Escritura atómica.** `JsonFileStore.SaveAsync` escribe a un temporal con nombre único (`<archivo>.<guid>.tmp`), lo mueve sobre el destino y lo borra si algo falla.
 
 ## 4. Desarrollo local
 
