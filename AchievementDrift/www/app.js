@@ -38,7 +38,7 @@ function askPassword() {
 	if (!passwordPrompt) {
 		passwordPrompt = Promise.resolve()
 			.then(() => {
-				const entered = prompt("Contraseña IPC de ASF (IPCPassword):");
+				const entered = prompt(t("promptPassword"));
 
 				if (!entered) {
 					return false;
@@ -57,7 +57,8 @@ function askPassword() {
 }
 
 async function api(path, options = {}, isRetry = false) {
-	const headers = { "Content-Type": "application/json" };
+	// Accept-Language: la API responde (errores de validación, nombres de logros) en el idioma del panel
+	const headers = { "Content-Type": "application/json", "Accept-Language": LANG };
 	const password = getPassword();
 
 	if (password) {
@@ -70,7 +71,7 @@ async function api(path, options = {}, isRetry = false) {
 		// No se pide contraseña: más intentos solo alargarían el bloqueo
 		unauthorized = true;
 
-		throw new Error("ASF ha bloqueado temporalmente tu IP o la IPC no permite acceso remoto (403). Espera y recarga.");
+		throw new Error(t("errBanned"));
 	}
 
 	if (response.status === 401) {
@@ -78,7 +79,7 @@ async function api(path, options = {}, isRetry = false) {
 			unauthorized = true;
 			clearPassword();
 
-			throw new Error("La contraseña IPC no es correcta. Revisa IPCPassword y vuelve a intentarlo (tras 5 fallos ASF bloquea tu IP durante un rato).");
+			throw new Error(t("errWrongPassword"));
 		}
 
 		// Otra petición ya pidió una contraseña nueva mientras esta estaba en curso: reintentamos con ella sin preguntar
@@ -91,7 +92,7 @@ async function api(path, options = {}, isRetry = false) {
 		if (!await askPassword()) {
 			unauthorized = true;
 
-			throw new Error("No autorizado: hace falta la contraseña IPC de ASF (IPCPassword).");
+			throw new Error(t("errNoPassword"));
 		}
 
 		return api(path, options, true);
@@ -104,11 +105,11 @@ async function api(path, options = {}, isRetry = false) {
 	try {
 		body = await response.json();
 	} catch {
-		throw new Error(`Error ${response.status}`);
+		throw new Error(t("errStatus", { status: response.status }));
 	}
 
 	if (!body.Success) {
-		throw new Error(body.Message || `Error ${response.status}`);
+		throw new Error(body.Message || t("errStatus", { status: response.status }));
 	}
 
 	return body.Result;
@@ -131,7 +132,7 @@ function escapeHtml(text) {
 	return div.innerHTML;
 }
 
-const STATE_LABELS = { Active: "▶️ Activo", Paused: "⏸️ Pausado", Completed: "🏁 Completado" };
+const STATE_LABEL_KEYS = { Active: "stateActive", Paused: "statePaused", Completed: "stateCompleted" };
 
 // Carátula del juego desde el CDN de Steam; si no existe se prueba la ruta antigua y, si tampoco, se muestra un fondo neutro
 const COVER_URLS = [
@@ -165,33 +166,39 @@ async function loadStatus() {
 	const status = await api(encodeURIComponent(currentBot()));
 
 	document.getElementById("summary").textContent =
-		`${status.Enabled ? "Activado" : "Desactivado"}${status.DryRun ? " · DryRun (simulación)" : ""} · ` +
-		`${status.Connected ? "conectado" : "desconectado"} · horario ${status.ActiveHours} (${status.TimeZone}) · ` +
-		`${status.InActiveWindow ? "dentro" : "fuera"} del horario · máx. ${status.MaxActiveGames} juegos a la vez`;
+		t("summaryLine", {
+			enabled: t(status.Enabled ? "summaryEnabled" : "summaryDisabled"),
+			dryRun: status.DryRun ? t("summaryDryRun") : "",
+			connected: t(status.Connected ? "summaryConnected" : "summaryDisconnected"),
+			hours: status.ActiveHours,
+			zone: status.TimeZone,
+			inside: t(status.InActiveWindow ? "summaryInside" : "summaryOutside"),
+			max: status.MaxActiveGames
+		});
 
 	const games = document.getElementById("games");
 
 	if (status.Games.length === 0) {
-		games.innerHTML = "<p>Todavía no hay planes. Se crean cuando el bot juega un juego elegible dentro del horario.</p>";
+		games.innerHTML = `<p>${escapeHtml(t("noPlans"))}</p>`;
 
 		return;
 	}
 
 	games.innerHTML = status.Games.map((game) => {
 		const next = game.Next
-			? `<div class="meta">Siguiente: ${escapeHtml(game.Next.Name)} (${game.Next.GlobalPercent.toFixed(1)}%)` +
-				(game.Next.EtaUtc ? ` · ~${new Date(game.Next.EtaUtc).toLocaleString()}` : "") + "</div>"
+			? `<div class="meta">${t("cardNext", { name: escapeHtml(game.Next.Name), pct: game.Next.GlobalPercent.toFixed(1) })}` +
+				(game.Next.EtaUtc ? ` · ~${escapeHtml(new Date(game.Next.EtaUtc).toLocaleString(locale()))}` : "") + "</div>"
 			: "";
 
 		return `<article class="card">
 			<div class="cover-wrap">${coverImage(game.AppId, "cover")}<span class="cover-fallback">${escapeHtml(game.Name)}</span></div>
 			<div class="card-body">
 				<h3>${escapeHtml(game.Name)}</h3>
-				<div class="meta">${STATE_LABELS[game.State] || escapeHtml(game.State)} · ${game.Done}/${game.Total} logros${game.Skipped ? ` · ${game.Skipped} saltados` : ""}</div>
+				<div class="meta">${STATE_LABEL_KEYS[game.State] ? t(STATE_LABEL_KEYS[game.State]) : escapeHtml(game.State)} · ${t("cardCounts", { done: game.Done, total: game.Total })}${game.Skipped ? t("cardSkipped", { skipped: game.Skipped }) : ""}</div>
 				<div class="bar"><span style="width:${game.ProgressPercent}%"></span></div>
-				<div class="meta">${game.ProgressPercent}% del plan · ${game.PlayedHours} h de ${game.PlanHours} h · día ${game.DaysSinceStart}</div>
+				<div class="meta">${t("cardProgress", { pct: game.ProgressPercent, played: game.PlayedHours, planned: game.PlanHours, day: game.DaysSinceStart })}</div>
 				${next}
-				<button type="button" class="btn-achievements" data-appid="${game.AppId}">Ver logros</button>
+				<button type="button" class="btn-achievements" data-appid="${game.AppId}">${escapeHtml(t("viewAchievements"))}</button>
 			</div>
 		</article>`;
 	}).join("");
@@ -205,7 +212,7 @@ function parseIds(text, listName) {
 		const value = /^\d+$/.test(token) ? Number(token) : NaN;
 
 		if (!Number.isSafeInteger(value) || value < 1 || value > MAX_APP_ID) {
-			throw new Error(`Appid inválido en ${listName}: ${token}`);
+			throw new Error(t("invalidAppId", { list: listName, token }));
 		}
 
 		ids.push(value);
@@ -256,7 +263,7 @@ async function saveConfig(overrides = {}) {
 	const config = { ...readForm(), ...overrides };
 
 	await api(`${encodeURIComponent(currentBot())}/Config`, { method: "PUT", body: JSON.stringify(config) });
-	showMessage("Configuración guardada.");
+	showMessage(t("configSaved"));
 	await loadConfig();
 }
 
@@ -270,7 +277,7 @@ function suggestTimeZone(configured) {
 		return;
 	}
 
-	box.innerHTML = `Tu navegador está en <b>${escapeHtml(detected)}</b>. <button type="button">Usar esta zona horaria</button>`;
+	box.innerHTML = `${t("tzSuggestion", { zone: escapeHtml(detected) })} <button type="button">${escapeHtml(t("tzUse"))}</button>`;
 	box.hidden = false;
 	box.querySelector("button").addEventListener("click", () => saveConfig({ TimeZone: detected }).catch((error) => showMessage(error.message)));
 }
@@ -297,6 +304,12 @@ async function refresh() {
 }
 
 async function init() {
+	// Al cambiar de idioma se vuelve a pintar lo generado por JavaScript y se piden de nuevo los textos de la API
+	initLanguage(() => {
+		refresh();
+		refreshAchievementsDialog();
+	});
+
 	initAchievementsDialog();
 
 	for (const button of document.querySelectorAll("nav button")) {

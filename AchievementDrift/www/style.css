@@ -30,6 +30,9 @@ header h1 { font-size: 18px; margin: 0; }
 nav { display: flex; gap: 4px; }
 nav button { border: 1px solid var(--border); background: transparent; color: var(--fg); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lang-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.lang-switch button { border: 0; background: transparent; color: var(--muted); padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+.lang-switch button.active { background: var(--accent); color: #fff; }
 main { max-width: 960px; margin: 0 auto; padding: 16px; }
 #message { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--warn); }
 #summary { color: var(--muted); margin-bottom: 12px; }

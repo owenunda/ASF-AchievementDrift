@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,15 +9,19 @@
 <body>
 	<header>
 		<div class="brand">
-			<a class="back" href="../" title="Volver al panel de ASF">← ASF</a>
+			<a class="back" href="../" data-i18n-title="backTitle">← ASF</a>
 			<h1>AchievementDrift</h1>
 		</div>
-		<label>Bot <select id="bot"></select></label>
+		<label><span data-i18n="bot">Bot</span> <select id="bot"></select></label>
 		<nav>
-			<button data-tab="status" class="active">Estado</button>
-			<button data-tab="config">Configuración</button>
-			<button data-tab="help">Ayuda</button>
+			<button data-tab="status" class="active" data-i18n="tabStatus">Status</button>
+			<button data-tab="config" data-i18n="tabConfig">Configuration</button>
+			<button data-tab="help" data-i18n="tabHelp">Help</button>
 		</nav>
+		<div class="lang-switch" role="group" aria-label="Language / Idioma">
+			<button type="button" data-lang-button="en">EN</button>
+			<button type="button" data-lang-button="es">ES</button>
+		</div>
 	</header>
 
 	<main>
@@ -31,53 +35,88 @@
 		<section id="tab-config" hidden>
 			<div id="tz-suggestion" hidden></div>
 			<form id="config-form">
-				<label><input type="checkbox" name="Enabled"> Activado</label>
-				<label><input type="checkbox" name="DryRun"> Modo simulación (DryRun): no desbloquea, solo registra</label>
-				<label>Días mínimos por juego <input type="number" name="MinDays" min="1" max="365" required></label>
-				<label>Días máximos por juego <input type="number" name="MaxDays" min="1" max="365" required></label>
-				<label>Horario activo (HH:mm-HH:mm) <input type="text" name="ActiveHours" pattern="\d{1,2}:\d{2}-\d{1,2}:\d{2}" required></label>
-				<label>Zona horaria (IANA, vacío = servidor) <input type="text" name="TimeZone" placeholder="America/Bogota"></label>
-				<label>Juegos en progreso a la vez <input type="number" name="MaxActiveGames" min="1" max="10" required></label>
-				<label><input type="checkbox" name="ExcludeVac"> Excluir juegos con VAC</label>
-				<label><input type="checkbox" name="ExcludeOnline"> Excluir juegos online/multijugador</label>
-				<label>Blacklist (appids separados por coma) <input type="text" name="Blacklist"></label>
-				<label>Allowlist (appids separados por coma) <input type="text" name="Allowlist"></label>
-				<button type="submit">Guardar</button>
+				<label><input type="checkbox" name="Enabled"> <span data-i18n="cfgEnabled">Enabled</span></label>
+				<label><input type="checkbox" name="DryRun"> <span data-i18n="cfgDryRun">Simulation mode (DryRun): logs only, does not unlock</span></label>
+				<label><span data-i18n="cfgMinDays">Minimum days per game</span> <input type="number" name="MinDays" min="1" max="365" required></label>
+				<label><span data-i18n="cfgMaxDays">Maximum days per game</span> <input type="number" name="MaxDays" min="1" max="365" required></label>
+				<label><span data-i18n="cfgActiveHours">Active hours (HH:mm-HH:mm)</span> <input type="text" name="ActiveHours" pattern="\d{1,2}:\d{2}-\d{1,2}:\d{2}" required></label>
+				<label><span data-i18n="cfgTimeZone">Time zone (IANA, empty = server)</span> <input type="text" name="TimeZone" placeholder="America/Bogota"></label>
+				<label><span data-i18n="cfgMaxActiveGames">Games in progress at once</span> <input type="number" name="MaxActiveGames" min="1" max="10" required></label>
+				<label><input type="checkbox" name="ExcludeVac"> <span data-i18n="cfgExcludeVac">Exclude VAC games</span></label>
+				<label><input type="checkbox" name="ExcludeOnline"> <span data-i18n="cfgExcludeOnline">Exclude online/multiplayer games</span></label>
+				<label><span data-i18n="cfgBlacklist">Blacklist (comma-separated appids)</span> <input type="text" name="Blacklist"></label>
+				<label><span data-i18n="cfgAllowlist">Allowlist (comma-separated appids)</span> <input type="text" name="Allowlist"></label>
+				<button type="submit" data-i18n="cfgSave">Save</button>
 			</form>
 		</section>
 
 		<section id="tab-help" hidden>
-			<h2>¿Qué hace?</h2>
-			<p>Mientras ASF juega tus juegos (<code>GamesPlayedWhileIdle</code> o farmeo de cromos), AchievementDrift desbloquea sus logros poco a poco y en orden aleatorio, para que el progreso se vea natural.</p>
-			<h2>Cómo decide</h2>
-			<ul>
-				<li>Cada juego recibe un <b>plan</b> la primera vez que se juega. Los logros comunes tienden a salir antes y los raros (menor % global) al final, con más espera.</li>
-				<li>Un juego no se completa en menos de <b>días mínimos</b>: el reloj solo avanza mientras el juego se juega y dentro de tu <b>horario activo</b>. Esto se garantiza mientras no amplíes el horario activo después de crear el plan (más horas al día aceleran el calendario).</li>
-				<li>Solo hay <b>N juegos en progreso</b> a la vez; los demás esperan su turno.</li>
-				<li>Como máximo se desbloquea un logro por minuto, y un mismo juego nunca dos con menos de 15 minutos de juego entre ellos.</li>
-			</ul>
-			<h2>Leer el estado</h2>
-			<ul>
-				<li>▶️ Activo: avanzando ahora. ⏸️ Pausado: no se está jugando o espera turno. 🏁 Completado.</li>
-				<li>"% del plan" es el tiempo de juego acumulado frente al tiempo total planificado.</li>
-				<li>La hora estimada del siguiente logro supone que el juego se sigue jugando.</li>
-				<li><b>Ver logros</b> abre la lista completa del juego (como en Steam): ✓ en los conseguidos, % global de jugadores y el estado de cada logro en el plan (siguiente, programado con su fecha estimada, desbloqueado por Drift, protegido o saltado). Se consulta a Steam en vivo; si el bot está desconectado se muestran solo los logros del plan.</li>
-				<li><b>← ASF</b> vuelve al panel principal de ASF.</li>
-			</ul>
-			<h2>Opciones</h2>
-			<ul>
-				<li><b>DryRun</b>: viene activado. Revisa el log de ASF (líneas <code>[AchievementDrift][DryRun]</code>) y desactívalo cuando estés conforme. Mientras está activo, el estado muestra los logros simulados como hechos (en Steam no se obtiene nada); al desactivarlo, los planes con logros simulados se regeneran desde el estado real de Steam.</li>
-				<li><b>Excluir VAC / online</b>: usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</li>
-				<li><b>Allowlist</b>: fuerza un juego aunque la tienda lo marque como online, no tenga datos de tienda o no muestre logros (bajo tu responsabilidad). No sirve para juegos con VAC mientras «Excluir juegos con VAC» esté activado: VAC siempre gana.</li>
-			</ul>
-			<h2>Riesgos</h2>
-			<p>Modificar logros va contra los términos de Steam. En juegos con anti-cheat o estadísticas validadas por servidor puede haber sanciones dentro del juego. Los logros protegidos por servidor se saltan automáticamente.</p>
-			<h2>Problemas comunes</h2>
-			<ul>
-				<li><b>No aparece ningún plan</b>: comprueba que estás dentro del horario, que el juego está en <code>GamesPlayedWhileIdle</code> y que no está excluido (el log dice por qué).</li>
-				<li><b>Uso <code>!play</code></b>: no es detectable por plugins; usa <code>GamesPlayedWhileIdle</code>.</li>
-				<li><b>401</b>: la contraseña IPC es incorrecta; recarga la página para introducirla de nuevo.</li>
-			</ul>
+			<div data-lang="en">
+				<h2>What does it do?</h2>
+				<p>While ASF plays your games (<code>GamesPlayedWhileIdle</code> or card farming), AchievementDrift unlocks their achievements little by little and in random order, so the progress looks natural.</p>
+				<h2>How it decides</h2>
+				<ul>
+					<li>Each game gets a <b>plan</b> the first time it is played. Common achievements tend to come first and rare ones (lower global %) last, with longer waits.</li>
+					<li>A game is never completed in less than the <b>minimum days</b>: the clock only advances while the game is being played and within your <b>active hours</b>. This holds as long as you do not widen the active hours after the plan is created (more hours per day speed up the calendar).</li>
+					<li>Only <b>N games are in progress</b> at once; the rest wait their turn.</li>
+					<li>At most one achievement is unlocked per minute, and the same game never gets two with less than 15 minutes of play between them.</li>
+				</ul>
+				<h2>Reading the status</h2>
+				<ul>
+					<li>▶️ Active: progressing now. ⏸️ Paused: not being played or waiting its turn. 🏁 Completed.</li>
+					<li>"% of the plan" is the accumulated play time versus the total planned time.</li>
+					<li>The estimated time of the next achievement assumes the game keeps being played.</li>
+					<li><b>View achievements</b> opens the full list of the game (like Steam): ✓ on the unlocked ones, global % of players and the state of each achievement in the plan (next, scheduled with its estimated date, unlocked by Drift, protected or skipped). Steam is queried live; if the bot is offline only the plan's achievements are shown.</li>
+					<li><b>← ASF</b> goes back to the main ASF panel. <b>EN / ES</b> switches the language of this page.</li>
+				</ul>
+				<h2>Options</h2>
+				<ul>
+					<li><b>DryRun</b>: enabled by default. Check the ASF log (<code>[AchievementDrift][DryRun]</code> lines) and disable it when you are happy. While it is on, the status shows simulated achievements as done (nothing is unlocked on Steam); when you turn it off, plans with simulated achievements are regenerated from the real Steam state.</li>
+					<li><b>Exclude VAC / online</b>: uses the Steam store categories. Some online games do not declare them: add them to the Blacklist.</li>
+					<li><b>Allowlist</b>: forces a game even if the store marks it as online, has no store data or shows no achievements (at your own risk). It does not work for VAC games while "Exclude VAC games" is on: VAC always wins.</li>
+				</ul>
+				<h2>Risks</h2>
+				<p>Modifying achievements is against Steam's terms. Games with anti-cheat or server-validated stats may apply in-game penalties. Server-protected achievements are skipped automatically.</p>
+				<h2>Common problems</h2>
+				<ul>
+					<li><b>No plan shows up</b>: check that you are within the active hours, that the game is in <code>GamesPlayedWhileIdle</code> and that it is not excluded (the log says why).</li>
+					<li><b>I use <code>!play</code></b>: plugins cannot detect it; use <code>GamesPlayedWhileIdle</code>.</li>
+					<li><b>401</b>: the IPC password is wrong; reload the page to enter it again.</li>
+				</ul>
+			</div>
+			<div data-lang="es" hidden>
+				<h2>¿Qué hace?</h2>
+				<p>Mientras ASF juega tus juegos (<code>GamesPlayedWhileIdle</code> o farmeo de cromos), AchievementDrift desbloquea sus logros poco a poco y en orden aleatorio, para que el progreso se vea natural.</p>
+				<h2>Cómo decide</h2>
+				<ul>
+					<li>Cada juego recibe un <b>plan</b> la primera vez que se juega. Los logros comunes tienden a salir antes y los raros (menor % global) al final, con más espera.</li>
+					<li>Un juego no se completa en menos de <b>días mínimos</b>: el reloj solo avanza mientras el juego se juega y dentro de tu <b>horario activo</b>. Esto se garantiza mientras no amplíes el horario activo después de crear el plan (más horas al día aceleran el calendario).</li>
+					<li>Solo hay <b>N juegos en progreso</b> a la vez; los demás esperan su turno.</li>
+					<li>Como máximo se desbloquea un logro por minuto, y un mismo juego nunca dos con menos de 15 minutos de juego entre ellos.</li>
+				</ul>
+				<h2>Leer el estado</h2>
+				<ul>
+					<li>▶️ Activo: avanzando ahora. ⏸️ Pausado: no se está jugando o espera turno. 🏁 Completado.</li>
+					<li>"% del plan" es el tiempo de juego acumulado frente al tiempo total planificado.</li>
+					<li>La hora estimada del siguiente logro supone que el juego se sigue jugando.</li>
+					<li><b>Ver logros</b> abre la lista completa del juego (como en Steam): ✓ en los conseguidos, % global de jugadores y el estado de cada logro en el plan (siguiente, programado con su fecha estimada, desbloqueado por Drift, protegido o saltado). Se consulta a Steam en vivo; si el bot está desconectado se muestran solo los logros del plan.</li>
+					<li><b>← ASF</b> vuelve al panel principal de ASF. <b>EN / ES</b> cambia el idioma de esta página.</li>
+				</ul>
+				<h2>Opciones</h2>
+				<ul>
+					<li><b>DryRun</b>: viene activado. Revisa el log de ASF (líneas <code>[AchievementDrift][DryRun]</code>) y desactívalo cuando estés conforme. Mientras está activo, el estado muestra los logros simulados como hechos (en Steam no se obtiene nada); al desactivarlo, los planes con logros simulados se regeneran desde el estado real de Steam.</li>
+					<li><b>Excluir VAC / online</b>: usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</li>
+					<li><b>Allowlist</b>: fuerza un juego aunque la tienda lo marque como online, no tenga datos de tienda o no muestre logros (bajo tu responsabilidad). No sirve para juegos con VAC mientras «Excluir juegos con VAC» esté activado: VAC siempre gana.</li>
+				</ul>
+				<h2>Riesgos</h2>
+				<p>Modificar logros va contra los términos de Steam. En juegos con anti-cheat o estadísticas validadas por servidor puede haber sanciones dentro del juego. Los logros protegidos por servidor se saltan automáticamente.</p>
+				<h2>Problemas comunes</h2>
+				<ul>
+					<li><b>No aparece ningún plan</b>: comprueba que estás dentro del horario, que el juego está en <code>GamesPlayedWhileIdle</code> y que no está excluido (el log dice por qué).</li>
+					<li><b>Uso <code>!play</code></b>: no es detectable por plugins; usa <code>GamesPlayedWhileIdle</code>.</li>
+					<li><b>401</b>: la contraseña IPC es incorrecta; recarga la página para introducirla de nuevo.</li>
+				</ul>
+			</div>
 		</section>
 	</main>
 
@@ -90,21 +129,22 @@
 					<div class="dlg-progress"><span id="dlg-progress-text"></span><span id="dlg-progress-pct"></span></div>
 					<div class="bar"><span id="dlg-progress-bar"></span></div>
 				</div>
-				<button type="button" class="dlg-close" id="dlg-close" aria-label="Cerrar">×</button>
+				<button type="button" class="dlg-close" id="dlg-close" data-i18n-aria="close">×</button>
 			</div>
 			<div class="dlg-tools">
-				<div class="chips" role="group" aria-label="Filtro">
-					<button type="button" data-filter="all" class="active">Todos</button>
-					<button type="button" data-filter="unlocked">Conseguidos</button>
-					<button type="button" data-filter="locked">Pendientes</button>
+				<div class="chips" role="group" data-i18n-aria="filter">
+					<button type="button" data-filter="all" class="active" data-i18n="filterAll">All</button>
+					<button type="button" data-filter="unlocked" data-i18n="filterUnlocked">Unlocked</button>
+					<button type="button" data-filter="locked" data-i18n="filterLocked">Locked</button>
 				</div>
-				<input type="search" id="dlg-search" placeholder="Buscar">
+				<input type="search" id="dlg-search" data-i18n-placeholder="search">
 			</div>
 			<p id="dlg-note" class="dlg-note" hidden></p>
 			<ul id="dlg-list" class="ach-list"></ul>
 		</div>
 	</dialog>
 
+	<script src="i18n.js"></script>
 	<script src="achievements.js"></script>
 	<script src="app.js"></script>
 </body>
