@@ -35,7 +35,7 @@ Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progre
 ## Requisitos
 
 - ASF **6.3.10.5** o compatible.
-- Se recomienda la build **`generic`** de ASF: las builds por sistema operativo (por ejemplo `linux-x64`) están recortadas y pueden dar `MissingMethodException`.
+- La build **`generic`** de ASF es **requerida** en lugar de las builds por sistema operativo (`linux-x64`, `win-x64`…): estas se publican recortadas (*trimmed*) y les faltan partes de .NET que el plugin usa, lo que provoca `MissingMethodException`. La imagen oficial de Docker de ASF no está recortada (usa el runtime de .NET), así que también sirve. Al cargar, el plugin comprueba esto y, si detecta una build recortada, lo avisa con un error en el log.
 - El bot debe estar farmeando horas, normalmente con `GamesPlayedWhileIdle` (o farmeando cromos).
 
 ## Instalación
@@ -137,7 +137,7 @@ Para **reiniciar el progreso** de un bot: detén ASF y borra su `<bot>.state.jso
 
 **La página `/drift` me lleva al panel de ASF o da 404.** La URL debe terminar con barra: `https://<tu-asf>/drift/`.
 
-**El plugin no carga y veo `MissingMethodException`.** La build `linux-x64` de ASF está recortada. Usa la build `generic`.
+**El plugin no carga, veo `MissingMethodException` o el aviso «Tu build de ASF parece recortada».** Las builds de ASF por sistema operativo (`linux-x64`, `win-x64`…) están recortadas. Usa la build `generic` o la imagen oficial de Docker.
 
 ## Compilar desde el código
 

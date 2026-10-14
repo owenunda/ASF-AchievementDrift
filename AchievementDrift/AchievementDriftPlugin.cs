@@ -46,6 +46,7 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 
 	public Task OnLoaded() {
 		ASF.ArchiLogger.LogGenericInfo($"{Name} {Version} cargado. Panel web: /drift/");
+		RuntimeSelfTest.Run();
 
 		return Task.CompletedTask;
 	}
