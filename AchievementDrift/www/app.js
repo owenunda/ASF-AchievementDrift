@@ -282,6 +282,30 @@ function suggestTimeZone(configured) {
 	box.querySelector("button").addEventListener("click", () => saveConfig({ TimeZone: detected }).catch((error) => showMessage(error.message)));
 }
 
+// Índice de la Ayuda: resalta la sección que se está leyendo
+function initHelpToc() {
+	for (const doc of document.querySelectorAll(".doc")) {
+		const links = [...doc.querySelectorAll(".doc-toc a")];
+		const byId = new Map(links.map((link) => [link.getAttribute("href").slice(1), link]));
+
+		const observer = new IntersectionObserver((entries) => {
+			const visible = entries.filter((entry) => entry.isIntersecting).sort((first, second) => first.boundingClientRect.top - second.boundingClientRect.top)[0];
+
+			if (visible) {
+				for (const link of links) {
+					link.classList.toggle("active", link === byId.get(visible.target.id));
+				}
+			}
+		}, { rootMargin: "-10% 0px -70% 0px" });
+
+		for (const section of doc.querySelectorAll(".doc-section")) {
+			observer.observe(section);
+		}
+
+		links[0]?.classList.add("active");
+	}
+}
+
 function selectTab(name) {
 	for (const button of document.querySelectorAll("nav button")) {
 		button.classList.toggle("active", button.dataset.tab === name);
@@ -311,6 +335,7 @@ async function init() {
 	});
 
 	initAchievementsDialog();
+	initHelpToc();
 
 	for (const button of document.querySelectorAll("nav button")) {
 		button.addEventListener("click", () => selectTab(button.dataset.tab));

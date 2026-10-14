@@ -17,8 +17,33 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="www\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<!-- index.html se escribe aparte con la versión en las URLs de CSS/JS (ver StampWebIndex) -->
+		<None Include="www\**\*" Exclude="www\index.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
+
+	<!-- Cache busting: Cloudflare/proxies reescriben Cache-Control y los navegadores guardan JS/CSS horas.
+	     Con ?v=<versión> en index.html cada release usa URLs nuevas y nunca se mezclan archivos viejos y nuevos -->
+	<UsingTask TaskName="StampVersion" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+		<ParameterGroup>
+			<Source ParameterType="System.String" Required="true" />
+			<Destination ParameterType="System.String" Required="true" />
+			<Version ParameterType="System.String" Required="true" />
+		</ParameterGroup>
+		<Task>
+			<Code Type="Fragment" Language="cs"><![CDATA[
+				System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Destination));
+				System.IO.File.WriteAllText(Destination, System.IO.File.ReadAllText(Source).Replace("__DRIFT_VERSION__", Version));
+			]]></Code>
+		</Task>
+	</UsingTask>
+
+	<Target Name="StampWebIndex" AfterTargets="CopyFilesToOutputDirectory">
+		<StampVersion Source="$(MSBuildProjectDirectory)\www\index.html" Destination="$(TargetDir)www\index.html" Version="$(Version)" />
+	</Target>
+
+	<Target Name="StampWebIndexPublish" AfterTargets="Publish">
+		<StampVersion Source="$(MSBuildProjectDirectory)\www\index.html" Destination="$([MSBuild]::NormalizePath($(MSBuildProjectDirectory), $(PublishDir), 'www', 'index.html'))" Version="$(Version)" />
+	</Target>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Copy SourceFolders="$(TargetDir)" DestinationFolder="..\ArchiSteamFarm\ArchiSteamFarm\bin\$(Configuration)\$(TargetFramework)\plugins\$(AssemblyName)\" SkipUnchangedFiles="true" />

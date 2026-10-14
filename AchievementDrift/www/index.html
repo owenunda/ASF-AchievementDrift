@@ -4,7 +4,7 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>AchievementDrift</title>
-	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="style.css?v=__DRIFT_VERSION__">
 </head>
 <body>
 	<header>
@@ -51,71 +51,267 @@
 		</section>
 
 		<section id="tab-help" hidden>
-			<div data-lang="en">
-				<h2>What does it do?</h2>
-				<p>While ASF plays your games (<code>GamesPlayedWhileIdle</code> or card farming), AchievementDrift unlocks their achievements little by little and in random order, so the progress looks natural.</p>
-				<h2>How it decides</h2>
-				<ul>
-					<li>Each game gets a <b>plan</b> the first time it is played. Common achievements tend to come first and rare ones (lower global %) last, with longer waits.</li>
-					<li>A game is never completed in less than the <b>minimum days</b>: the clock only advances while the game is being played and within your <b>active hours</b>. This holds as long as you do not widen the active hours after the plan is created (more hours per day speed up the calendar).</li>
-					<li>Only <b>N games are in progress</b> at once; the rest wait their turn.</li>
-					<li>At most one achievement is unlocked per minute, and the same game never gets two with less than 15 minutes of play between them.</li>
-				</ul>
-				<h2>Reading the status</h2>
-				<ul>
-					<li>▶️ Active: progressing now. ⏸️ Paused: not being played or waiting its turn. 🏁 Completed.</li>
-					<li>"% of the plan" is the accumulated play time versus the total planned time.</li>
-					<li>The estimated time of the next achievement assumes the game keeps being played.</li>
-					<li><b>View achievements</b> opens the full list of the game (like Steam): ✓ on the unlocked ones, global % of players and the state of each achievement in the plan (next, scheduled with its estimated date, unlocked by Drift, protected or skipped). Steam is queried live; if the bot is offline only the plan's achievements are shown.</li>
-					<li><b>← ASF</b> goes back to the main ASF panel. <b>EN / ES</b> switches the language of this page.</li>
-				</ul>
-				<h2>Options</h2>
-				<ul>
-					<li><b>DryRun</b>: enabled by default. Check the ASF log (<code>[AchievementDrift][DryRun]</code> lines) and disable it when you are happy. While it is on, the status shows simulated achievements as done (nothing is unlocked on Steam); when you turn it off, plans with simulated achievements are regenerated from the real Steam state.</li>
-					<li><b>Exclude VAC / online</b>: uses the Steam store categories. Some online games do not declare them: add them to the Blacklist.</li>
-					<li><b>Allowlist</b>: forces a game even if the store marks it as online, has no store data or shows no achievements (at your own risk). It does not work for VAC games while "Exclude VAC games" is on: VAC always wins.</li>
-				</ul>
-				<h2>Risks</h2>
-				<p>Modifying achievements is against Steam's terms. Games with anti-cheat or server-validated stats may apply in-game penalties. Server-protected achievements are skipped automatically.</p>
-				<h2>Common problems</h2>
-				<ul>
-					<li><b>No plan shows up</b>: check that you are within the active hours, that the game is in <code>GamesPlayedWhileIdle</code> and that it is not excluded (the log says why).</li>
-					<li><b>I use <code>!play</code></b>: plugins cannot detect it; use <code>GamesPlayedWhileIdle</code>.</li>
-					<li><b>401</b>: the IPC password is wrong; reload the page to enter it again.</li>
-				</ul>
+			<div class="doc" data-lang="en">
+				<nav class="doc-toc" aria-label="On this page">
+					<a href="#en-what">What it does</a>
+					<a href="#en-how">How it works</a>
+					<a href="#en-status">Reading the status</a>
+					<a href="#en-options">Options</a>
+					<a href="#en-risks">Risks</a>
+					<a href="#en-faq">Common problems</a>
+				</nav>
+				<article class="doc-body">
+					<section id="en-what" class="doc-section">
+						<h2>What it does</h2>
+						<p class="lead">While ASF plays your games, AchievementDrift unlocks their achievements little by little, in a random order, so the progress looks like someone actually playing.</p>
+						<dl class="glance">
+							<div><dt>Pace</dt><dd>A game never completes in less than <b>MinDays</b> (30 by default).</dd></div>
+							<div><dt>Order</dt><dd>Common achievements tend to come first; rare ones arrive last, after longer waits.</dd></div>
+							<div><dt>Window</dt><dd>Progress only happens while the game is being played and within your <b>active hours</b>.</dd></div>
+						</dl>
+						<p>It works with the games in <code>GamesPlayedWhileIdle</code> and with card farming. <code>!play</code> cannot be detected by plugins.</p>
+					</section>
+
+					<section id="en-how" class="doc-section">
+						<h2>How it works</h2>
+						<ol class="steps">
+							<li>
+								<h3>A plan per game</h3>
+								<p>The first time an eligible game is played, it gets a plan with every achievement you do not have yet. Protected (server-validated) achievements never enter it.</p>
+							</li>
+							<li>
+								<h3>Order by rarity</h3>
+								<p>Each achievement's chance to come early grows with its global %. An 80% achievement comes before a 2% one in about 97% of plans, but the exact order changes every time.</p>
+							</li>
+							<li>
+								<h3>Spacing</h3>
+								<p>The wait before each achievement grows as it gets rarer (a 2% one waits about 6× longer than an 80% one), with random variation and at least 15 minutes of play between two achievements of the same game.</p>
+							</li>
+							<li>
+								<h3>Only within your hours</h3>
+								<p>The plan is measured in minutes of play inside your active hours. Outside them nothing advances; at most one achievement per minute is unlocked, and only <b>N games</b> are in progress at once.</p>
+							</li>
+						</ol>
+						<figure class="plan-viz" aria-label="Example plan: achievements placed over time">
+							<div class="plan-track">
+								<span style="left:8.9%" data-pct="80%"></span>
+								<span style="left:14%" data-pct="72%"></span>
+								<span style="left:19.5%" data-pct="65%"></span>
+								<span style="left:25.2%" data-pct="58%"></span>
+								<span style="left:31.3%" data-pct="50%"></span>
+								<span style="left:38.1%" data-pct="41%"></span>
+								<span class="rare" style="left:46.1%" data-pct="30%"></span>
+								<span class="rare" style="left:56.4%" data-pct="18%"></span>
+								<span class="rarer" style="left:70.9%" data-pct="9%"></span>
+								<span class="rarest" style="left:96%" data-pct="3%"></span>
+							</div>
+							<div class="plan-axis"><span>Plan starts</span><span>≥ MinDays later</span></div>
+							<figcaption>Example plan. Each mark is an achievement and its global %: common ones arrive close together at the start, rare ones far apart at the end.</figcaption>
+						</figure>
+					</section>
+
+					<section id="en-status" class="doc-section">
+						<h2>Reading the status</h2>
+						<h3>Games</h3>
+						<dl class="legend">
+							<div><dt><span class="badge accent">Active</span></dt><dd>Progressing now.</dd></div>
+							<div><dt><span class="badge muted">Paused</span></dt><dd>Not being played, outside your hours or waiting for a free slot.</dd></div>
+							<div><dt><span class="badge ok">Completed</span></dt><dd>Nothing left in its plan.</dd></div>
+						</dl>
+						<p><b>% of the plan</b> is the play time accumulated against the total planned time. The estimated time of the next achievement assumes the game keeps being played.</p>
+						<h3>Achievements (View achievements)</h3>
+						<dl class="legend">
+							<div><dt><span class="badge accent">Next</span></dt><dd>The next one due, with its estimated time.</dd></div>
+							<div><dt><span class="badge muted">Scheduled</span></dt><dd>Planned for later, with its estimated date.</dd></div>
+							<div><dt><span class="badge ok">Unlocked by Drift</span></dt><dd>Unlocked by the plugin, with the real date.</dd></div>
+							<div><dt><span class="badge info">Simulated</span></dt><dd>Only in DryRun: what it would have unlocked.</dd></div>
+							<div><dt><span class="badge warn">Protected</span></dt><dd>Validated by the game's server: never touched.</dd></div>
+							<div><dt><span class="badge warn">Skipped</span></dt><dd>Steam rejected it, or it failed 5 times in a row.</dd></div>
+						</dl>
+					</section>
+
+					<section id="en-options" class="doc-section">
+						<h2>Options</h2>
+						<div class="opts">
+							<table>
+								<thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+								<tbody>
+									<tr><td>Simulation mode (DryRun)</td><td><code>on</code></td><td>Only logs what it would unlock (<code>[AchievementDrift][DryRun]</code> lines). When you turn it off, simulated plans are rebuilt from your real Steam state.</td></tr>
+									<tr><td>Minimum / maximum days</td><td><code>30 / 45</code></td><td>How long a game takes to complete. Changes only affect new plans.</td></tr>
+									<tr><td>Active hours</td><td><code>10:00-01:00</code></td><td>When achievements may unlock. It can cross midnight. Widening it after a plan exists speeds that plan up.</td></tr>
+									<tr><td>Time zone</td><td><code>server</code></td><td>Your IANA zone, e.g. <code>America/Bogota</code>. Docker usually runs in UTC: set it.</td></tr>
+									<tr><td>Games in progress at once</td><td><code>2</code></td><td>The rest wait their turn. More games at once looks less natural.</td></tr>
+									<tr><td>Exclude VAC / online</td><td><code>on / on</code></td><td>Uses the Steam store categories. Some online games do not declare them: add those to the Blacklist.</td></tr>
+									<tr><td>Blacklist</td><td><code>—</code></td><td>Appids that are always excluded.</td></tr>
+									<tr><td>Allowlist</td><td><code>—</code></td><td>Forces a game in even if marked online or without store data, at your own risk. VAC still wins while VAC exclusion is on.</td></tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+
+					<section id="en-risks" class="doc-section">
+						<h2>Risks</h2>
+						<div class="callout" role="note">
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.8 19.5h18.4L12 3.5Z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>
+							<p>Modifying achievements is against Steam's terms. Games with anti-cheat or server-validated stats may apply in-game penalties. Server-protected achievements are skipped automatically, but use it at your own risk.</p>
+						</div>
+					</section>
+
+					<section id="en-faq" class="doc-section">
+						<h2>Common problems</h2>
+						<details class="faq">
+							<summary>No plan shows up</summary>
+							<p>Check that you are within your active hours, that the game is in <code>GamesPlayedWhileIdle</code> and that it is not excluded. The ASF log says why a game is excluded.</p>
+						</details>
+						<details class="faq">
+							<summary>I use <code>!play</code></summary>
+							<p>Plugins cannot see the games started with <code>!play</code>. Put them in <code>GamesPlayedWhileIdle</code> instead.</p>
+						</details>
+						<details class="faq">
+							<summary>It goes faster than expected</summary>
+							<p>Plans are measured in minutes of play inside your active hours. A wider window or more games at once gives more minutes per day.</p>
+						</details>
+						<details class="faq">
+							<summary>It asks for the password again (401) or says 403</summary>
+							<p>401: the IPC password is wrong; enter it again. 403: ASF blocked your IP for a while after several failed attempts, or IPC does not allow remote access. Wait and reload.</p>
+						</details>
+						<details class="faq">
+							<summary>The page looks half updated</summary>
+							<p>Your browser kept old files in its cache. Reload with <kbd>Ctrl</kbd> + <kbd>F5</kbd>.</p>
+						</details>
+					</section>
+				</article>
 			</div>
-			<div data-lang="es" hidden>
-				<h2>¿Qué hace?</h2>
-				<p>Mientras ASF juega tus juegos (<code>GamesPlayedWhileIdle</code> o farmeo de cromos), AchievementDrift desbloquea sus logros poco a poco y en orden aleatorio, para que el progreso se vea natural.</p>
-				<h2>Cómo decide</h2>
-				<ul>
-					<li>Cada juego recibe un <b>plan</b> la primera vez que se juega. Los logros comunes tienden a salir antes y los raros (menor % global) al final, con más espera.</li>
-					<li>Un juego no se completa en menos de <b>días mínimos</b>: el reloj solo avanza mientras el juego se juega y dentro de tu <b>horario activo</b>. Esto se garantiza mientras no amplíes el horario activo después de crear el plan (más horas al día aceleran el calendario).</li>
-					<li>Solo hay <b>N juegos en progreso</b> a la vez; los demás esperan su turno.</li>
-					<li>Como máximo se desbloquea un logro por minuto, y un mismo juego nunca dos con menos de 15 minutos de juego entre ellos.</li>
-				</ul>
-				<h2>Leer el estado</h2>
-				<ul>
-					<li>▶️ Activo: avanzando ahora. ⏸️ Pausado: no se está jugando o espera turno. 🏁 Completado.</li>
-					<li>"% del plan" es el tiempo de juego acumulado frente al tiempo total planificado.</li>
-					<li>La hora estimada del siguiente logro supone que el juego se sigue jugando.</li>
-					<li><b>Ver logros</b> abre la lista completa del juego (como en Steam): ✓ en los conseguidos, % global de jugadores y el estado de cada logro en el plan (siguiente, programado con su fecha estimada, desbloqueado por Drift, protegido o saltado). Se consulta a Steam en vivo; si el bot está desconectado se muestran solo los logros del plan.</li>
-					<li><b>← ASF</b> vuelve al panel principal de ASF. <b>EN / ES</b> cambia el idioma de esta página.</li>
-				</ul>
-				<h2>Opciones</h2>
-				<ul>
-					<li><b>DryRun</b>: viene activado. Revisa el log de ASF (líneas <code>[AchievementDrift][DryRun]</code>) y desactívalo cuando estés conforme. Mientras está activo, el estado muestra los logros simulados como hechos (en Steam no se obtiene nada); al desactivarlo, los planes con logros simulados se regeneran desde el estado real de Steam.</li>
-					<li><b>Excluir VAC / online</b>: usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</li>
-					<li><b>Allowlist</b>: fuerza un juego aunque la tienda lo marque como online, no tenga datos de tienda o no muestre logros (bajo tu responsabilidad). No sirve para juegos con VAC mientras «Excluir juegos con VAC» esté activado: VAC siempre gana.</li>
-				</ul>
-				<h2>Riesgos</h2>
-				<p>Modificar logros va contra los términos de Steam. En juegos con anti-cheat o estadísticas validadas por servidor puede haber sanciones dentro del juego. Los logros protegidos por servidor se saltan automáticamente.</p>
-				<h2>Problemas comunes</h2>
-				<ul>
-					<li><b>No aparece ningún plan</b>: comprueba que estás dentro del horario, que el juego está en <code>GamesPlayedWhileIdle</code> y que no está excluido (el log dice por qué).</li>
-					<li><b>Uso <code>!play</code></b>: no es detectable por plugins; usa <code>GamesPlayedWhileIdle</code>.</li>
-					<li><b>401</b>: la contraseña IPC es incorrecta; recarga la página para introducirla de nuevo.</li>
-				</ul>
+			<div class="doc" data-lang="es" hidden>
+				<nav class="doc-toc" aria-label="En esta página">
+					<a href="#es-what">Qué hace</a>
+					<a href="#es-how">Cómo funciona</a>
+					<a href="#es-status">Leer el estado</a>
+					<a href="#es-options">Opciones</a>
+					<a href="#es-risks">Riesgos</a>
+					<a href="#es-faq">Problemas comunes</a>
+				</nav>
+				<article class="doc-body">
+					<section id="es-what" class="doc-section">
+						<h2>Qué hace</h2>
+						<p class="lead">Mientras ASF juega tus juegos, AchievementDrift desbloquea sus logros poco a poco y en orden aleatorio, para que el progreso parezca el de alguien que de verdad está jugando.</p>
+						<dl class="glance">
+							<div><dt>Ritmo</dt><dd>Un juego nunca se completa en menos de <b>MinDays</b> (30 por defecto).</dd></div>
+							<div><dt>Orden</dt><dd>Los logros comunes tienden a salir primero; los raros llegan al final, tras esperas más largas.</dd></div>
+							<div><dt>Horario</dt><dd>Solo avanza mientras el juego se está jugando y dentro de tu <b>horario activo</b>.</dd></div>
+						</dl>
+						<p>Funciona con los juegos de <code>GamesPlayedWhileIdle</code> y con el farmeo de cromos. Los plugins no pueden detectar <code>!play</code>.</p>
+					</section>
+
+					<section id="es-how" class="doc-section">
+						<h2>Cómo funciona</h2>
+						<ol class="steps">
+							<li>
+								<h3>Un plan por juego</h3>
+								<p>La primera vez que se juega un juego elegible, recibe un plan con todos los logros que aún no tienes. Los protegidos (validados por el servidor) nunca entran.</p>
+							</li>
+							<li>
+								<h3>Orden por rareza</h3>
+								<p>La probabilidad de que un logro salga pronto crece con su % global. Uno del 80% sale antes que uno del 2% en cerca del 97% de los planes, pero el orden exacto cambia cada vez.</p>
+							</li>
+							<li>
+								<h3>Espaciado</h3>
+								<p>La espera antes de cada logro crece cuanto más raro es (uno del 2% espera unas 6 veces más que uno del 80%), con variación aleatoria y al menos 15 minutos de juego entre dos logros del mismo juego.</p>
+							</li>
+							<li>
+								<h3>Solo en tu horario</h3>
+								<p>El plan se mide en minutos de juego dentro de tu horario activo. Fuera de él no avanza nada; como máximo se desbloquea un logro por minuto, y solo hay <b>N juegos</b> en progreso a la vez.</p>
+							</li>
+						</ol>
+						<figure class="plan-viz" aria-label="Plan de ejemplo: logros repartidos en el tiempo">
+							<div class="plan-track">
+								<span style="left:8.9%" data-pct="80%"></span>
+								<span style="left:14%" data-pct="72%"></span>
+								<span style="left:19.5%" data-pct="65%"></span>
+								<span style="left:25.2%" data-pct="58%"></span>
+								<span style="left:31.3%" data-pct="50%"></span>
+								<span style="left:38.1%" data-pct="41%"></span>
+								<span class="rare" style="left:46.1%" data-pct="30%"></span>
+								<span class="rare" style="left:56.4%" data-pct="18%"></span>
+								<span class="rarer" style="left:70.9%" data-pct="9%"></span>
+								<span class="rarest" style="left:96%" data-pct="3%"></span>
+							</div>
+							<div class="plan-axis"><span>Empieza el plan</span><span>≥ MinDays después</span></div>
+							<figcaption>Plan de ejemplo. Cada marca es un logro con su % global: los comunes llegan seguidos al principio y los raros, muy espaciados, al final.</figcaption>
+						</figure>
+					</section>
+
+					<section id="es-status" class="doc-section">
+						<h2>Leer el estado</h2>
+						<h3>Juegos</h3>
+						<dl class="legend">
+							<div><dt><span class="badge accent">Activo</span></dt><dd>Avanzando ahora.</dd></div>
+							<div><dt><span class="badge muted">Pausado</span></dt><dd>No se está jugando, está fuera de tu horario o espera un hueco libre.</dd></div>
+							<div><dt><span class="badge ok">Completado</span></dt><dd>No le queda nada en su plan.</dd></div>
+						</dl>
+						<p><b>% del plan</b> es el tiempo de juego acumulado frente al tiempo total planificado. La hora estimada del siguiente logro supone que el juego se sigue jugando.</p>
+						<h3>Logros (Ver logros)</h3>
+						<dl class="legend">
+							<div><dt><span class="badge accent">Siguiente</span></dt><dd>El próximo en salir, con su hora estimada.</dd></div>
+							<div><dt><span class="badge muted">Programado</span></dt><dd>Planificado para más adelante, con su fecha estimada.</dd></div>
+							<div><dt><span class="badge ok">Desbloqueado por Drift</span></dt><dd>Desbloqueado por el plugin, con la fecha real.</dd></div>
+							<div><dt><span class="badge info">Simulado</span></dt><dd>Solo en DryRun: lo que habría desbloqueado.</dd></div>
+							<div><dt><span class="badge warn">Protegido</span></dt><dd>Lo valida el servidor del juego: nunca se toca.</dd></div>
+							<div><dt><span class="badge warn">Saltado</span></dt><dd>Steam lo rechazó, o falló 5 veces seguidas.</dd></div>
+						</dl>
+					</section>
+
+					<section id="es-options" class="doc-section">
+						<h2>Opciones</h2>
+						<div class="opts">
+							<table>
+								<thead><tr><th>Opción</th><th>Por defecto</th><th>Qué hace</th></tr></thead>
+								<tbody>
+									<tr><td>Modo simulación (DryRun)</td><td><code>activo</code></td><td>Solo registra lo que desbloquearía (líneas <code>[AchievementDrift][DryRun]</code>). Al desactivarlo, los planes simulados se rehacen desde tu estado real en Steam.</td></tr>
+									<tr><td>Días mínimos / máximos</td><td><code>30 / 45</code></td><td>Cuánto tarda un juego en completarse. Los cambios solo afectan a planes nuevos.</td></tr>
+									<tr><td>Horario activo</td><td><code>10:00-01:00</code></td><td>Cuándo pueden salir logros. Puede cruzar la medianoche. Ampliarlo con un plan ya creado lo acelera.</td></tr>
+									<tr><td>Zona horaria</td><td><code>servidor</code></td><td>Tu zona IANA, p. ej. <code>America/Bogota</code>. Docker suele ir en UTC: configúrala.</td></tr>
+									<tr><td>Juegos en progreso a la vez</td><td><code>2</code></td><td>El resto espera su turno. Más juegos a la vez se ve menos natural.</td></tr>
+									<tr><td>Excluir VAC / online</td><td><code>sí / sí</code></td><td>Usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</td></tr>
+									<tr><td>Blacklist</td><td><code>—</code></td><td>Appids que siempre se excluyen.</td></tr>
+									<tr><td>Allowlist</td><td><code>—</code></td><td>Fuerza un juego aunque esté marcado como online o sin datos de tienda, bajo tu responsabilidad. VAC sigue ganando mientras su exclusión esté activa.</td></tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+
+					<section id="es-risks" class="doc-section">
+						<h2>Riesgos</h2>
+						<div class="callout" role="note">
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.8 19.5h18.4L12 3.5Z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>
+							<p>Modificar logros va contra los términos de Steam. En juegos con anti-cheat o estadísticas validadas por servidor puede haber sanciones dentro del juego. Los logros protegidos por servidor se saltan automáticamente, pero úsalo bajo tu responsabilidad.</p>
+						</div>
+					</section>
+
+					<section id="es-faq" class="doc-section">
+						<h2>Problemas comunes</h2>
+						<details class="faq">
+							<summary>No aparece ningún plan</summary>
+							<p>Comprueba que estás dentro de tu horario activo, que el juego está en <code>GamesPlayedWhileIdle</code> y que no está excluido. El log de ASF dice por qué se excluye un juego.</p>
+						</details>
+						<details class="faq">
+							<summary>Uso <code>!play</code></summary>
+							<p>Los plugins no pueden ver los juegos iniciados con <code>!play</code>. Ponlos en <code>GamesPlayedWhileIdle</code>.</p>
+						</details>
+						<details class="faq">
+							<summary>Va más rápido de lo esperado</summary>
+							<p>Los planes se miden en minutos de juego dentro de tu horario activo. Una franja más amplia o más juegos a la vez dan más minutos por día.</p>
+						</details>
+						<details class="faq">
+							<summary>Me vuelve a pedir la contraseña (401) o dice 403</summary>
+							<p>401: la contraseña IPC es incorrecta; vuelve a escribirla. 403: ASF bloqueó tu IP un rato tras varios intentos fallidos, o la IPC no permite acceso remoto. Espera y recarga.</p>
+						</details>
+						<details class="faq">
+							<summary>La página se ve a medio actualizar</summary>
+							<p>Tu navegador guardó archivos viejos en caché. Recarga con <kbd>Ctrl</kbd> + <kbd>F5</kbd>.</p>
+						</details>
+					</section>
+				</article>
 			</div>
 		</section>
 	</main>
@@ -123,7 +319,7 @@
 	<dialog id="achievements-dialog" aria-labelledby="dlg-title">
 		<div class="dlg">
 			<div class="dlg-head">
-				<img id="dlg-cover" class="dlg-cover" alt="">
+				<img id="dlg-cover" class="dlg-cover missing" alt="">
 				<div class="dlg-title">
 					<h2 id="dlg-title"></h2>
 					<div class="dlg-progress"><span id="dlg-progress-text"></span><span id="dlg-progress-pct"></span></div>
@@ -144,8 +340,8 @@
 		</div>
 	</dialog>
 
-	<script src="i18n.js"></script>
-	<script src="achievements.js"></script>
-	<script src="app.js"></script>
+	<script src="i18n.js?v=__DRIFT_VERSION__"></script>
+	<script src="achievements.js?v=__DRIFT_VERSION__"></script>
+	<script src="app.js?v=__DRIFT_VERSION__"></script>
 </body>
 </html>
