@@ -8,7 +8,10 @@
 </head>
 <body>
 	<header>
-		<h1>AchievementDrift</h1>
+		<div class="brand">
+			<a class="back" href="../" title="Volver al panel de ASF">← ASF</a>
+			<h1>AchievementDrift</h1>
+		</div>
 		<label>Bot <select id="bot"></select></label>
 		<nav>
 			<button data-tab="status" class="active">Estado</button>
@@ -76,6 +79,31 @@
 		</section>
 	</main>
 
+	<dialog id="achievements-dialog" aria-labelledby="dlg-title">
+		<div class="dlg">
+			<div class="dlg-head">
+				<img id="dlg-cover" class="dlg-cover" alt="">
+				<div class="dlg-title">
+					<h2 id="dlg-title"></h2>
+					<div class="dlg-progress"><span id="dlg-progress-text"></span><span id="dlg-progress-pct"></span></div>
+					<div class="bar"><span id="dlg-progress-bar"></span></div>
+				</div>
+				<button type="button" class="dlg-close" id="dlg-close" aria-label="Cerrar">×</button>
+			</div>
+			<div class="dlg-tools">
+				<div class="chips" role="group" aria-label="Filtro">
+					<button type="button" data-filter="all" class="active">Todos</button>
+					<button type="button" data-filter="unlocked">Conseguidos</button>
+					<button type="button" data-filter="locked">Pendientes</button>
+				</div>
+				<input type="search" id="dlg-search" placeholder="Buscar">
+			</div>
+			<p id="dlg-note" class="dlg-note" hidden></p>
+			<ul id="dlg-list" class="ach-list"></ul>
+		</div>
+	</dialog>
+
+	<script src="achievements.js"></script>
 	<script src="app.js"></script>
 </body>
 </html>

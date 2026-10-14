@@ -133,6 +133,34 @@ function escapeHtml(text) {
 
 const STATE_LABELS = { Active: "▶️ Activo", Paused: "⏸️ Pausado", Completed: "🏁 Completado" };
 
+// Carátula del juego desde el CDN de Steam; si no existe se prueba la ruta antigua y, si tampoco, se muestra un fondo neutro
+const COVER_URLS = [
+	(appId) => `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+	(appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
+];
+
+function coverImage(appId, className) {
+	return `<img class="${className}" src="${COVER_URLS[0](appId)}" data-appid="${appId}" data-cover="0" alt="" loading="lazy">`;
+}
+
+// Delegado (fase de captura: "error" no burbujea) para todas las carátulas de la página
+document.addEventListener("error", (event) => {
+	const img = event.target;
+
+	if (!(img instanceof HTMLImageElement) || img.dataset.cover === undefined) {
+		return;
+	}
+
+	const next = Number(img.dataset.cover) + 1;
+
+	if (next < COVER_URLS.length) {
+		img.dataset.cover = String(next);
+		img.src = COVER_URLS[next](img.dataset.appid);
+	} else {
+		img.classList.add("missing");
+	}
+}, true);
+
 async function loadStatus() {
 	const status = await api(encodeURIComponent(currentBot()));
 
@@ -156,11 +184,15 @@ async function loadStatus() {
 			: "";
 
 		return `<article class="card">
-			<h3>${escapeHtml(game.Name)}</h3>
-			<div class="meta">${STATE_LABELS[game.State] || game.State} · ${game.Done}/${game.Total} logros${game.Skipped ? ` · ${game.Skipped} saltados` : ""}</div>
-			<div class="bar"><span style="width:${game.ProgressPercent}%"></span></div>
-			<div class="meta">${game.ProgressPercent}% del plan · ${game.PlayedHours} h de ${game.PlanHours} h · día ${game.DaysSinceStart}</div>
-			${next}
+			<div class="cover-wrap">${coverImage(game.AppId, "cover")}<span class="cover-fallback">${escapeHtml(game.Name)}</span></div>
+			<div class="card-body">
+				<h3>${escapeHtml(game.Name)}</h3>
+				<div class="meta">${STATE_LABELS[game.State] || escapeHtml(game.State)} · ${game.Done}/${game.Total} logros${game.Skipped ? ` · ${game.Skipped} saltados` : ""}</div>
+				<div class="bar"><span style="width:${game.ProgressPercent}%"></span></div>
+				<div class="meta">${game.ProgressPercent}% del plan · ${game.PlayedHours} h de ${game.PlanHours} h · día ${game.DaysSinceStart}</div>
+				${next}
+				<button type="button" class="btn-achievements" data-appid="${game.AppId}">Ver logros</button>
+			</div>
 		</article>`;
 	}).join("");
 }
@@ -265,6 +297,8 @@ async function refresh() {
 }
 
 async function init() {
+	initAchievementsDialog();
+
 	for (const button of document.querySelectorAll("nav button")) {
 		button.addEventListener("click", () => selectTab(button.dataset.tab));
 	}
