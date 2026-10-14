@@ -47,7 +47,16 @@ public sealed record DriftConfig {
 			errors.Add($"{nameof(MaxActiveGames)} debe estar entre 1 y {MaxAllowedActiveGames}.");
 		}
 
-		if (Blacklist.Contains(0) || Allowlist.Contains(0)) {
+		// El JSON de la IPC no impone la nulabilidad: una lista null llega aquí tal cual
+		if (Blacklist is null) {
+			errors.Add($"{nameof(Blacklist)} no puede ser null (usa [] para una lista vacía).");
+		}
+
+		if (Allowlist is null) {
+			errors.Add($"{nameof(Allowlist)} no puede ser null (usa [] para una lista vacía).");
+		}
+
+		if ((Blacklist?.Contains(0) == true) || (Allowlist?.Contains(0) == true)) {
 			errors.Add("Las listas no pueden contener el appid 0.");
 		}
 

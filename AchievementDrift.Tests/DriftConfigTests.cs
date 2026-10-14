@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using AchievementDrift.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -64,6 +66,15 @@ public sealed class DriftConfigTests {
 	public void ZeroAppIdInListsIsRejected() {
 		Assert.IsTrue(new DriftConfig { Blacklist = [0] }.Validate().Count > 0);
 		Assert.IsTrue(new DriftConfig { Allowlist = [0] }.Validate().Count > 0);
+	}
+
+	[TestMethod]
+	public void NullListsAreRejectedWithoutThrowing() {
+		IReadOnlyList<string> blacklistErrors = new DriftConfig { Blacklist = null! }.Validate();
+		IReadOnlyList<string> allowlistErrors = new DriftConfig { Allowlist = null! }.Validate();
+
+		Assert.IsTrue(blacklistErrors.Any(static error => error.Contains("Blacklist", StringComparison.Ordinal)));
+		Assert.IsTrue(allowlistErrors.Any(static error => error.Contains("Allowlist", StringComparison.Ordinal)));
 	}
 
 	[TestMethod]
