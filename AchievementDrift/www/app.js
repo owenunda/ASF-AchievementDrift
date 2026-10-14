@@ -311,7 +311,7 @@ function selectTab(name) {
 		button.classList.toggle("active", button.dataset.tab === name);
 	}
 
-	for (const section of document.querySelectorAll("main section")) {
+	for (const section of document.querySelectorAll("main > section")) {
 		section.hidden = section.id !== `tab-${name}`;
 	}
 }

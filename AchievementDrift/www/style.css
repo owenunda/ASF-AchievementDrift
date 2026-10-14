@@ -21,6 +21,8 @@
 }
 
 * { box-sizing: border-box; }
+/* hidden debe ganar siempre a los display de las reglas de componentes (.doc usa grid) */
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
 header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--card); }
 header h1 { font-size: 18px; margin: 0; }
