@@ -20,7 +20,7 @@ internal static class DriftRuntime {
 	private static readonly ConcurrentDictionary<Bot, StatsHandler> Handlers = new();
 
 	// La vista de logros consulta a Steam en vivo; se cachea un minuto para no repetir la consulta en cada apertura
-	private static readonly ConcurrentDictionary<(string BotName, uint AppId), (DateTime FetchedAtUtc, IReadOnlyList<LiveAchievement> Achievements)> LiveCache = new();
+	private static readonly ConcurrentDictionary<(string BotName, uint AppId, bool Spanish), (DateTime FetchedAtUtc, IReadOnlyList<LiveAchievement> Achievements)> LiveCache = new();
 	private static readonly TimeSpan LiveCacheLifetime = TimeSpan.FromMinutes(1);
 
 	// Serializa arranque/parada por bot: un logon y una desconexión solapados no pueden dejar un runner huérfano
@@ -114,7 +114,10 @@ internal static class DriftRuntime {
 	private static SemaphoreSlim GetLifecycleLock(Bot bot) => LifecycleLocks.GetOrAdd(bot.BotName, static _ => new SemaphoreSlim(1, 1));
 
 	private static async Task<IReadOnlyList<LiveAchievement>?> GetLiveAchievementsAsync(Bot bot, uint appId) {
-		if (LiveCache.TryGetValue((bot.BotName, appId), out (DateTime FetchedAtUtc, IReadOnlyList<LiveAchievement> Achievements) cached) && (DateTime.UtcNow - cached.FetchedAtUtc < LiveCacheLifetime)) {
+		// Los nombres y descripciones dependen del idioma de la petición
+		(string BotName, uint AppId, bool Spanish) key = (bot.BotName, appId, Texts.IsSpanish());
+
+		if (LiveCache.TryGetValue(key, out (DateTime FetchedAtUtc, IReadOnlyList<LiveAchievement> Achievements) cached) && (DateTime.UtcNow - cached.FetchedAtUtc < LiveCacheLifetime)) {
 			return cached.Achievements;
 		}
 
@@ -134,7 +137,7 @@ internal static class DriftRuntime {
 			.Select(static achievement => new LiveAchievement(achievement.ApiName, achievement.DisplayName, achievement.Description, achievement.Icon, achievement.IconGray, achievement.IsUnlocked, achievement.IsProtected))
 			.ToList();
 
-		LiveCache[(bot.BotName, appId)] = (DateTime.UtcNow, achievements);
+		LiveCache[key] = (DateTime.UtcNow, achievements);
 
 		return achievements;
 	}

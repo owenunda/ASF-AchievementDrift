@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
 using AchievementDrift.Core;
@@ -44,6 +45,14 @@ public sealed class DriftConfigTests {
 		DriftConfig config = new() { ActiveHours = hours };
 
 		Assert.IsTrue(config.Validate().Count > 0);
+	}
+
+	[TestMethod]
+	public void ValidationMessagesFollowLanguage() {
+		DriftConfig config = new() { MinDays = 0 };
+
+		StringAssert.Contains(config.Validate(new CultureInfo("en-US"))[0], "must be between");
+		StringAssert.Contains(config.Validate(new CultureInfo("es-ES"))[0], "debe estar entre");
 	}
 
 	[TestMethod]

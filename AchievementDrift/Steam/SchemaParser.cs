@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using AchievementDrift.Core;
 using SteamKit2;
 
 namespace AchievementDrift.Steam;
@@ -10,12 +11,15 @@ internal sealed record SchemaAchievement(string ApiName, string DisplayName, uin
 
 // Interpreta el esquema KeyValues de ClientGetUserStatsResponse (ver spec §11)
 internal static class SchemaParser {
-	private static readonly string[] PreferredLanguages = ["spanish", "latam", "english"];
+	// Nombres y descripciones en el idioma activo; inglés como respaldo
+	private static readonly string[] EnglishLanguages = ["english"];
+	private static readonly string[] SpanishLanguages = ["spanish", "latam", "english"];
 
-	internal static List<SchemaAchievement> Parse(KeyValue schema, IReadOnlyDictionary<uint, uint> statValues) {
+	internal static List<SchemaAchievement> Parse(KeyValue schema, IReadOnlyDictionary<uint, uint> statValues, CultureInfo? culture = null) {
 		ArgumentNullException.ThrowIfNull(schema);
 		ArgumentNullException.ThrowIfNull(statValues);
 
+		string[] languages = Texts.IsSpanish(culture) ? SpanishLanguages : EnglishLanguages;
 		KeyValue stats = schema["stats"];
 		Dictionary<string, (uint Id, int Permission)> intStats = new(StringComparer.Ordinal);
 
@@ -63,14 +67,14 @@ internal static class SchemaParser {
 				result.Add(
 					new SchemaAchievement(
 						apiName,
-						GetLocalized(display["name"]) ?? apiName,
+						GetLocalized(display["name"], languages) ?? apiName,
 						statId,
 						bit,
 						(value & (1u << bit)) != 0,
 						isProtected,
 						dependencyStatId,
 						dependencyValue,
-						GetLocalized(display["desc"]) ?? "",
+						GetLocalized(display["desc"], languages) ?? "",
 						display["icon"].Value ?? "",
 						display["icon_gray"].Value ?? ""
 					)
@@ -81,8 +85,8 @@ internal static class SchemaParser {
 		return result;
 	}
 
-	private static string? GetLocalized(KeyValue texts) {
-		foreach (string language in PreferredLanguages) {
+	private static string? GetLocalized(KeyValue texts, string[] languages) {
+		foreach (string language in languages) {
 			string? text = texts[language].Value;
 
 			if (!string.IsNullOrWhiteSpace(text)) {

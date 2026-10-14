@@ -8,8 +8,6 @@ using ArchiSteamFarm.Steam;
 namespace AchievementDrift.Commands;
 
 internal static class DriftCommands {
-	private const string Usage = "Uso: !drift status | on | off | plan <appid> | replan <appid>";
-
 	internal static async Task<string?> HandleAsync(Bot bot, EAccess access, string[] args) {
 		ArgumentNullException.ThrowIfNull(bot);
 		ArgumentNullException.ThrowIfNull(args);
@@ -28,7 +26,7 @@ internal static class DriftCommands {
 			"OFF" => await SetEnabledAsync(bot, false).ConfigureAwait(false),
 			"PLAN" when hasAppId => await ShowPlanAsync(bot, appId).ConfigureAwait(false),
 			"REPLAN" when hasAppId => await ReplanAsync(bot, appId).ConfigureAwait(false),
-			_ => Usage
+			_ => Texts.Get(ETextKey.CmdUsage)
 		};
 
 		return bot.Commands.FormatBotResponse(response);
@@ -38,20 +36,20 @@ internal static class DriftCommands {
 		BotRunner? runner = DriftRuntime.GetRunner(bot);
 
 		if ((runner == null) || !await runner.ReplanAsync(appId).ConfigureAwait(false)) {
-			return "El bot no está conectado.";
+			return Texts.Get(ETextKey.CmdBotNotConnected);
 		}
 
-		return $"Plan de {appId} eliminado; se regenerará cuando el juego vuelva a estar activo.";
+		return Texts.Format(ETextKey.CmdReplanDone, appId);
 	}
 
 	private static async Task<string> SetEnabledAsync(Bot bot, bool enabled) {
 		DriftConfig config = await DriftRuntime.Configs.GetAsync(bot.BotName).ConfigureAwait(false);
 		await DriftRuntime.Configs.SaveAsync(bot.BotName, config with { Enabled = enabled }).ConfigureAwait(false);
 
-		return enabled ? "AchievementDrift activado." : "AchievementDrift desactivado.";
+		return Texts.Get(enabled ? ETextKey.CmdEnabled : ETextKey.CmdDisabled);
 	}
 
-	private static string FormatPlanOrMissing(BotState state, uint appId) => state.Plans.TryGetValue(appId, out GamePlan? plan) ? StatusBuilder.FormatPlan(plan) : $"No hay plan para {appId} todavía.";
+	private static string FormatPlanOrMissing(BotState state, uint appId) => state.Plans.TryGetValue(appId, out GamePlan? plan) ? StatusBuilder.FormatPlan(plan) : Texts.Format(ETextKey.CmdNoPlan, appId);
 
 	private static async Task<string> ShowPlanAsync(Bot bot, uint appId) {
 		BotRunner? runner = DriftRuntime.GetRunner(bot);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -27,10 +28,12 @@ public sealed class DriftController : ArchiController {
 	[HttpGet("{botName:required}/Config")]
 	[ProducesResponseType<GenericResponse<DriftConfig>>((int) HttpStatusCode.OK)]
 	public async Task<ActionResult<GenericResponse>> ConfigGet(string botName) {
+		ApplyRequestLanguage();
+
 		Bot? bot = FindBot(botName);
 
 		if (bot == null) {
-			return BadRequest(new GenericResponse(false, $"El bot {botName} no existe."));
+			return BadRequest(new GenericResponse(false, Texts.Format(ETextKey.ApiBotNotFound, botName)));
 		}
 
 		DriftConfig config = await DriftRuntime.Configs.GetAsync(bot.BotName).ConfigureAwait(false);
@@ -43,11 +46,12 @@ public sealed class DriftController : ArchiController {
 	[ProducesResponseType<GenericResponse>((int) HttpStatusCode.OK)]
 	public async Task<ActionResult<GenericResponse>> ConfigPut(string botName, [FromBody] DriftConfig config) {
 		ArgumentNullException.ThrowIfNull(config);
+		ApplyRequestLanguage();
 
 		Bot? bot = FindBot(botName);
 
 		if (bot == null) {
-			return BadRequest(new GenericResponse(false, $"El bot {botName} no existe."));
+			return BadRequest(new GenericResponse(false, Texts.Format(ETextKey.ApiBotNotFound, botName)));
 		}
 
 		IReadOnlyList<string> errors = config.Validate();
@@ -65,14 +69,16 @@ public sealed class DriftController : ArchiController {
 	[HttpGet("{botName:required}/Games/{appId:required}")]
 	[ProducesResponseType<GenericResponse<GameAchievements>>((int) HttpStatusCode.OK)]
 	public async Task<ActionResult<GenericResponse>> GameGet(string botName, uint appId) {
+		ApplyRequestLanguage();
+
 		if (appId == 0) {
-			return BadRequest(new GenericResponse(false, "El appid debe ser mayor que 0."));
+			return BadRequest(new GenericResponse(false, Texts.Get(ETextKey.ApiAppIdZero)));
 		}
 
 		Bot? bot = FindBot(botName);
 
 		if (bot == null) {
-			return BadRequest(new GenericResponse(false, $"El bot {botName} no existe."));
+			return BadRequest(new GenericResponse(false, Texts.Format(ETextKey.ApiBotNotFound, botName)));
 		}
 
 		GameAchievements result = await DriftRuntime.GetGameAchievementsAsync(bot, appId).ConfigureAwait(false);
@@ -84,15 +90,33 @@ public sealed class DriftController : ArchiController {
 	[HttpGet("{botName:required}")]
 	[ProducesResponseType<GenericResponse<DriftStatus>>((int) HttpStatusCode.OK)]
 	public async Task<ActionResult<GenericResponse>> StatusGet(string botName) {
+		ApplyRequestLanguage();
+
 		Bot? bot = FindBot(botName);
 
 		if (bot == null) {
-			return BadRequest(new GenericResponse(false, $"El bot {botName} no existe."));
+			return BadRequest(new GenericResponse(false, Texts.Format(ETextKey.ApiBotNotFound, botName)));
 		}
 
 		DriftStatus status = await DriftRuntime.GetStatusAsync(bot).ConfigureAwait(false);
 
 		return Ok(new GenericResponse<DriftStatus>(status));
+	}
+
+	// El panel envía su idioma en Accept-Language: los mensajes y nombres de esta petición lo siguen.
+	// CurrentUICulture vive en el contexto asíncrono de la petición, así que no afecta a ASF ni a otras peticiones
+	private void ApplyRequestLanguage() {
+		string preferred = Request.Headers.AcceptLanguage.ToString().Split(',')[0].Split(';')[0].Trim();
+
+		if (preferred.Length == 0) {
+			return;
+		}
+
+		try {
+			CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(preferred);
+		} catch (CultureNotFoundException) {
+			// Idioma desconocido: se mantiene el de ASF
+		}
 	}
 
 	// Resuelve el bot con GetBot (mismo comportamiento que ASF) y devuelve la instancia del registro interno de ASF,

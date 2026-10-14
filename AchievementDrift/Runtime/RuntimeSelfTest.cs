@@ -1,3 +1,4 @@
+using AchievementDrift.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -37,7 +38,7 @@ internal static class RuntimeSelfTest {
 			return true;
 		}
 
-		ASF.ArchiLogger.LogGenericError($"[AchievementDrift] Tu build de ASF parece recortada (trimmed): faltan {string.Join(", ", missing)}. El plugin no funcionará bien. Usa la build «generic» de ASF o la imagen oficial de Docker.");
+		ASF.ArchiLogger.LogGenericError(Texts.Format(ETextKey.LogTrimmed, string.Join(", ", missing)));
 
 		return false;
 	}

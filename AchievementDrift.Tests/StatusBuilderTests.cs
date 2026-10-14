@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using AchievementDrift.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -73,6 +74,27 @@ public sealed class StatusBuilderTests {
 
 		StringAssert.Contains(text, "Juego 1");
 		StringAssert.Contains(text, "DryRun");
+	}
+
+	[TestMethod]
+	public void TextFollowsLanguage() {
+		DriftStatus status = StatusBuilder.Build("manticora", true, new DriftConfig(), AlwaysOn, SampleState(), Now);
+
+		string english = StatusBuilder.FormatText(status, new CultureInfo("en-US"));
+		string spanish = StatusBuilder.FormatText(status, new CultureInfo("es-ES"));
+
+		StringAssert.Contains(english, "of the plan");
+		StringAssert.Contains(english, "Web panel: /drift/");
+		StringAssert.Contains(spanish, "del plan");
+		StringAssert.Contains(spanish, "Panel web: /drift/");
+	}
+
+	[TestMethod]
+	public void PlanTextFollowsLanguage() {
+		GamePlan plan = SampleState().Plans[1];
+
+		StringAssert.Contains(StatusBuilder.FormatPlan(plan, new CultureInfo("en-US")), "h played of");
+		StringAssert.Contains(StatusBuilder.FormatPlan(plan, new CultureInfo("es-ES")), "h jugadas de");
 	}
 
 	[TestMethod]

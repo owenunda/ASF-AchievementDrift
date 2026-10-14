@@ -1,3 +1,4 @@
+using AchievementDrift.Core;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ internal static class JsonFileStore {
 
 			return json.ToJsonObject<T>();
 		} catch (Exception e) {
-			ASF.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudo leer {path}, se usarán valores por defecto: {e.Message}");
+			ASF.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogReadError, path, e.Message));
 
 			return null;
 		}

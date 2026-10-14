@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 
 namespace AchievementDrift.Core;
 
@@ -20,44 +21,44 @@ public sealed record DriftConfig {
 	public ImmutableHashSet<uint> Blacklist { get; init; } = [];
 	public ImmutableHashSet<uint> Allowlist { get; init; } = [];
 
-	public string DescribeTimeZone() => TimeZone ?? $"{TimeZoneInfo.Local.Id} (servidor)";
+	public string DescribeTimeZone(CultureInfo? culture = null) => TimeZone ?? Texts.FormatFor(culture, ETextKey.TimeZoneServer, TimeZoneInfo.Local.Id);
 
 	public TimeZoneInfo ResolveTimeZone() => TimeZoneResolver.TryFind(TimeZone, out TimeZoneInfo? timeZone) ? timeZone : TimeZoneInfo.Local;
 
-	public IReadOnlyList<string> Validate() {
+	public IReadOnlyList<string> Validate(CultureInfo? culture = null) {
 		List<string> errors = [];
 
 		if (MinDays is < 1 or > MaxAllowedDays) {
-			errors.Add($"{nameof(MinDays)} debe estar entre 1 y {MaxAllowedDays}.");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValMinDays, nameof(MinDays), MaxAllowedDays));
 		}
 
 		if ((MaxDays < MinDays) || (MaxDays > MaxAllowedDays)) {
-			errors.Add($"{nameof(MaxDays)} debe estar entre {nameof(MinDays)} y {MaxAllowedDays}.");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValMaxDays, nameof(MaxDays), nameof(MinDays), MaxAllowedDays));
 		}
 
 		if (!ActiveWindow.TryParseHours(ActiveHours, out _, out _)) {
-			errors.Add($"{nameof(ActiveHours)} debe tener el formato HH:mm-HH:mm (por ejemplo 10:00-01:00).");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValActiveHours, nameof(ActiveHours)));
 		}
 
 		if ((TimeZone != null) && !TimeZoneResolver.TryFind(TimeZone, out _)) {
-			errors.Add($"{nameof(TimeZone)} '{TimeZone}' no es una zona horaria válida (usa un identificador IANA, por ejemplo America/Bogota).");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValTimeZone, nameof(TimeZone), TimeZone));
 		}
 
 		if (MaxActiveGames is < 1 or > MaxAllowedActiveGames) {
-			errors.Add($"{nameof(MaxActiveGames)} debe estar entre 1 y {MaxAllowedActiveGames}.");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValMaxActiveGames, nameof(MaxActiveGames), MaxAllowedActiveGames));
 		}
 
 		// El JSON de la IPC no impone la nulabilidad: una lista null llega aquí tal cual
 		if (Blacklist is null) {
-			errors.Add($"{nameof(Blacklist)} no puede ser null (usa [] para una lista vacía).");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValListNull, nameof(Blacklist)));
 		}
 
 		if (Allowlist is null) {
-			errors.Add($"{nameof(Allowlist)} no puede ser null (usa [] para una lista vacía).");
+			errors.Add(Texts.FormatFor(culture, ETextKey.ValListNull, nameof(Allowlist)));
 		}
 
 		if ((Blacklist?.Contains(0) == true) || (Allowlist?.Contains(0) == true)) {
-			errors.Add("Las listas no pueden contener el appid 0.");
+			errors.Add(Texts.Get(ETextKey.ValListZero, culture));
 		}
 
 		return errors;

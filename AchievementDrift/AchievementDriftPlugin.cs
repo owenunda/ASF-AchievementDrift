@@ -1,3 +1,4 @@
+using AchievementDrift.Core;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -45,7 +46,7 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 	}
 
 	public Task OnLoaded() {
-		ASF.ArchiLogger.LogGenericInfo($"{Name} {Version} cargado. Panel web: /drift/");
+		ASF.ArchiLogger.LogGenericInfo(Texts.Format(ETextKey.LogLoaded, Name, Version, StatusBuilder.PanelPath));
 		RuntimeSelfTest.Run();
 
 		return Task.CompletedTask;

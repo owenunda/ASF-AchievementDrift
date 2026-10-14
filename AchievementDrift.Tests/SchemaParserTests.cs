@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using AchievementDrift.Steam;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -49,7 +50,9 @@ public sealed class SchemaParserTests {
 		)
 	);
 
-	private static List<SchemaAchievement> Parse(params (uint Stat, uint Value)[] values) => SchemaParser.Parse(Schema(), values.ToDictionary(static v => v.Stat, static v => v.Value));
+	private static readonly CultureInfo SpanishCulture = new("es-ES");
+
+	private static List<SchemaAchievement> Parse(params (uint Stat, uint Value)[] values) => SchemaParser.Parse(Schema(), values.ToDictionary(static v => v.Stat, static v => v.Value), SpanishCulture);
 
 	[TestMethod]
 	public void ParsesAllAchievementBits() {
@@ -68,6 +71,13 @@ public sealed class SchemaParserTests {
 	public void PrefersSpanishDisplayName() {
 		Assert.AreEqual("Primero", Parse().Single(static a => a.ApiName == "ACH_FIRST").DisplayName);
 		Assert.AreEqual("ACH_SECOND EN", Parse().Single(static a => a.ApiName == "ACH_SECOND").DisplayName);
+	}
+
+	[TestMethod]
+	public void EnglishCultureUsesEnglishNames() {
+		List<SchemaAchievement> english = SchemaParser.Parse(Schema(), new Dictionary<uint, uint>(), new CultureInfo("en-US"));
+
+		Assert.AreEqual("First", english.Single(static a => a.ApiName == "ACH_FIRST").DisplayName);
 	}
 
 	[TestMethod]
@@ -118,7 +128,10 @@ public sealed class SchemaParserTests {
 			)
 		);
 
-		SchemaAchievement achievement = SchemaParser.Parse(schema, new Dictionary<uint, uint>()).Single();
+		SchemaAchievement achievement = SchemaParser.Parse(schema, new Dictionary<uint, uint>(), SpanishCulture).Single();
+		SchemaAchievement english = SchemaParser.Parse(schema, new Dictionary<uint, uint>(), new CultureInfo("en-US")).Single();
+
+		Assert.AreEqual("Do it", english.Description);
 
 		Assert.AreEqual("Hazlo", achievement.Description);
 		Assert.AreEqual("abc.jpg", achievement.Icon);

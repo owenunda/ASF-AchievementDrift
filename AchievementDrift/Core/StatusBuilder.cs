@@ -29,11 +29,11 @@ internal static class StatusBuilder {
 		return new DriftStatus(botName, connected, config.Enabled, config.DryRun, window.Contains(nowUtc), config.ActiveHours, config.DescribeTimeZone(), config.MaxActiveGames, games);
 	}
 
-	internal static string FormatPlan(GamePlan plan) {
+	internal static string FormatPlan(GamePlan plan, CultureInfo? culture = null) {
 		ArgumentNullException.ThrowIfNull(plan);
 
 		StringBuilder text = new();
-		text.AppendLine(CultureInfo.InvariantCulture, $"Plan de {plan.GameName} ({plan.AppId}) — {Hours(plan.ActiveMinutes)} h jugadas de {Hours(plan.PlanMinutes)} h:");
+		text.AppendLine(Texts.FormatFor(culture, ETextKey.PlanHeader, plan.GameName, plan.AppId, Hours(plan.ActiveMinutes), Hours(plan.PlanMinutes)));
 
 		foreach (PlannedAchievement entry in plan.Entries.OrderBy(static e => e.OffsetMinutes)) {
 			string mark = entry.State switch {
@@ -43,21 +43,31 @@ internal static class StatusBuilder {
 				_ => "⏳"
 			};
 
-			text.AppendLine(CultureInfo.InvariantCulture, $"{mark} {entry.DisplayName} ({entry.GlobalPercent:0.#}%) — a las {Hours(entry.OffsetMinutes)} h");
+			text.AppendLine(Texts.FormatFor(culture, ETextKey.PlanEntry, mark, entry.DisplayName, entry.GlobalPercent, Hours(entry.OffsetMinutes)));
 		}
 
 		return text.ToString().TrimEnd();
 	}
 
-	internal static string FormatText(DriftStatus status) {
+	internal static string FormatText(DriftStatus status, CultureInfo? culture = null) {
 		ArgumentNullException.ThrowIfNull(status);
 
 		StringBuilder text = new();
-		text.AppendLine(CultureInfo.InvariantCulture, $"AchievementDrift: {(status.Enabled ? "activado" : "desactivado")}{(status.DryRun ? " · DryRun (simulación)" : "")} · horario {status.ActiveHours} ({status.TimeZone}) · {(status.InActiveWindow ? "dentro" : "fuera")} del horario");
+		text.AppendLine(
+			Texts.FormatFor(
+				culture,
+				ETextKey.StatusHeader,
+				Texts.Get(status.Enabled ? ETextKey.StatusEnabled : ETextKey.StatusDisabled, culture),
+				status.DryRun ? Texts.Get(ETextKey.StatusDryRun, culture) : "",
+				status.ActiveHours,
+				status.TimeZone,
+				Texts.Get(status.InActiveWindow ? ETextKey.StatusInside : ETextKey.StatusOutside, culture)
+			)
+		);
 
 		if (status.Games.Count == 0) {
-			text.AppendLine("Todavía no hay planes. Se crean cuando el bot juega un juego elegible dentro del horario.");
-			text.Append(PanelLine);
+			text.AppendLine(Texts.Get(ETextKey.StatusNoPlans, culture));
+			text.Append(Texts.FormatFor(culture, ETextKey.StatusPanel, PanelPath));
 
 			return text.ToString();
 		}
@@ -69,10 +79,10 @@ internal static class StatusBuilder {
 				_ => "🏁"
 			};
 
-			text.Append(CultureInfo.InvariantCulture, $"{state} {game.Name}: {game.Done}/{game.Total} ({game.ProgressPercent:0}% del plan, día {game.DaysSinceStart})");
+			text.Append(Texts.FormatFor(culture, ETextKey.StatusGame, state, game.Name, game.Done, game.Total, game.ProgressPercent, game.DaysSinceStart));
 
 			if (game.Next != null) {
-				text.Append(CultureInfo.InvariantCulture, $" · siguiente: {game.Next.Name} ({game.Next.GlobalPercent:0.#}%)");
+				text.Append(Texts.FormatFor(culture, ETextKey.StatusNext, game.Next.Name, game.Next.GlobalPercent));
 
 				if (game.Next.EtaUtc is DateTime eta) {
 					text.Append(CultureInfo.InvariantCulture, $" ~{eta:yyyy-MM-dd HH:mm} UTC");
@@ -82,12 +92,10 @@ internal static class StatusBuilder {
 			text.AppendLine();
 		}
 
-		text.Append(PanelLine);
+		text.Append(Texts.FormatFor(culture, ETextKey.StatusPanel, PanelPath));
 
 		return text.ToString();
 	}
-
-	private const string PanelLine = $"Panel web: {PanelPath} (añádelo a la dirección de tu ASF, con la barra final)";
 
 	private static GameStatus BuildGame(GamePlan plan, bool isActive, ActiveWindow window, DateTime nowUtc) {
 		string state = plan.IsCompleted ? StateCompleted : isActive ? StateActive : StatePaused;

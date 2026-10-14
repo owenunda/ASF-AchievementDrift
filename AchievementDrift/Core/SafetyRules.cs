@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Linq;
 
 namespace AchievementDrift.Core;
@@ -20,15 +21,18 @@ internal static class SafetyRules {
 	// Multi-player, MMO, Cross-Platform Multiplayer, Online PvP, Online Co-op, PvP
 	internal static readonly ImmutableHashSet<int> OnlineCategories = [1, 20, 27, 36, 38, 49];
 
-	internal static string Describe(EEligibility eligibility) => eligibility switch {
-		EEligibility.Eligible => "elegible",
-		EEligibility.Unknown => "sin datos de tienda (añádelo a Allowlist si es seguro)",
-		EEligibility.Blacklisted => "en Blacklist",
-		EEligibility.Vac => "tiene VAC",
-		EEligibility.Online => "es online/multijugador",
-		EEligibility.NoAchievements => "no tiene logros",
-		_ => throw new ArgumentOutOfRangeException(nameof(eligibility))
-	};
+	internal static string Describe(EEligibility eligibility, CultureInfo? culture = null) => Texts.Get(
+		eligibility switch {
+			EEligibility.Eligible => ETextKey.EligEligible,
+			EEligibility.Unknown => ETextKey.EligUnknown,
+			EEligibility.Blacklisted => ETextKey.EligBlacklisted,
+			EEligibility.Vac => ETextKey.EligVac,
+			EEligibility.Online => ETextKey.EligOnline,
+			EEligibility.NoAchievements => ETextKey.EligNoAchievements,
+			_ => throw new ArgumentOutOfRangeException(nameof(eligibility))
+		},
+		culture
+	);
 
 	internal static EEligibility Evaluate(uint appId, DriftConfig config, StoreInfo? info) {
 		ArgumentNullException.ThrowIfNull(config);

@@ -1,3 +1,4 @@
+using AchievementDrift.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -59,7 +60,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 		CMsgClientGetUserStatsResponse response = callback.Response;
 
 		if ((EResult) response.eresult != EResult.OK) {
-			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam no devolvió estadísticas de {appId}: {(EResult) response.eresult}");
+			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogNoStats, appId, (EResult) response.eresult));
 
 			return null;
 		}
@@ -78,7 +79,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		using (MemoryStream stream = new(response.schema)) {
 			if (!schema.TryReadAsBinary(stream)) {
-				Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Esquema inválido para {appId}");
+				Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogInvalidSchema, appId));
 
 				return null;
 			}
@@ -132,12 +133,12 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		if (IsTransient(result)) {
 			// Error temporal de Steam: el logro sigue pendiente y se reintenta más tarde
-			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam no pudo guardar el logro de {appId} por un error temporal: {result}");
+			Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogStoreTransient, appId, result));
 
 			return null;
 		}
 
-		Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam rechazó guardar el logro de {appId}: {result}");
+		Bot.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogStoreRejected, appId, result));
 
 		return false;
 	}

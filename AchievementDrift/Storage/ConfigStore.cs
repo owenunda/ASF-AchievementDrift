@@ -23,7 +23,7 @@ internal sealed class ConfigStore {
 		IReadOnlyList<string> errors = config.Validate();
 
 		if (errors.Count > 0) {
-			ASF.ArchiLogger.LogGenericWarning($"[AchievementDrift] Configuración inválida para {botName} ({string.Join(" ", errors)}); se usan valores por defecto.");
+			ASF.ArchiLogger.LogGenericWarning(Texts.Format(ETextKey.LogInvalidConfig, botName, string.Join(" ", errors)));
 			config = new DriftConfig();
 		}
 
