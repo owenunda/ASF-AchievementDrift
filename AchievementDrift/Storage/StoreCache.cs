@@ -11,6 +11,10 @@ namespace AchievementDrift.Storage;
 internal sealed class StoreCache : IDisposable {
 	private const string FileName = "store-cache.json";
 
+	private static readonly TimeSpan FailureLifetime = TimeSpan.FromMinutes(30);
+
+	// Fallos de red recientes por appid (solo en memoria): evita reconsultar la tienda en cada tick
+	private readonly Dictionary<uint, DateTime> FailedAtUtc = [];
 	private readonly SemaphoreSlim Lock = new(1, 1);
 	private Dictionary<uint, StoreInfo>? Entries;
 
@@ -26,16 +30,25 @@ internal sealed class StoreCache : IDisposable {
 				return cached;
 			}
 
+			if (FailedAtUtc.TryGetValue(appId, out DateTime failedAtUtc) && (DateTime.UtcNow - failedAtUtc < FailureLifetime)) {
+				return null;
+			}
+
 			if (ASF.WebBrowser == null) {
 				return null;
 			}
 
 			StoreInfo? info = await WebApis.GetStoreInfoAsync(ASF.WebBrowser, appId).ConfigureAwait(false);
 
-			if (info != null) {
-				Entries[appId] = info;
-				await JsonFileStore.SaveAsync(FileName, Entries).ConfigureAwait(false);
+			if (info == null) {
+				FailedAtUtc[appId] = DateTime.UtcNow;
+
+				return null;
 			}
+
+			FailedAtUtc.Remove(appId);
+			Entries[appId] = info;
+			await JsonFileStore.SaveAsync(FileName, Entries).ConfigureAwait(false);
 
 			return info;
 		} finally {
