@@ -16,10 +16,13 @@ gradual, aleatoria y con apariencia realista.
 1. Los logros con menor % global de obtención tardan más en salir y tienden a salir al final.
 2. Cada juego tarda **como mínimo `MinDays` (por defecto 30) días de calendario** en completarse.
 3. El orden y los tiempos de desbloqueo son aleatorios.
-4. Solo se avanza en juegos que el bot **está jugando en ese momento** (`GamesPlayedWhileIdle` / `!play`).
-   Si un juego deja de jugarse, su progreso se pausa.
+4. Solo se avanza en juegos que el bot **está jugando en ese momento**: `GamesPlayedWhileIdle` (cuando ASF
+   no farmea cromos) o los juegos del farmeo de cromos. Si un juego deja de jugarse, su progreso se pausa.
+   `!play` no se soporta: ASF no guarda qué juegos se le pasan.
+4b. Como máximo `MaxActiveGames` (por defecto 2) juegos están "en progreso" a la vez; el resto espera turno.
 5. Solo se desbloquea dentro de un **horario humano** configurable, en la zona horaria del usuario.
-6. Se excluyen automáticamente los juegos con VAC y los de una lista negra manual.
+6. Se excluyen automáticamente los juegos con VAC, los juegos online/multijugador y los de una lista negra
+   manual. Una lista blanca fuerza la inclusión de juegos concretos.
 7. Control por comandos, por endpoints IPC y por una página web propia con documentación.
 8. Publicado en GitHub con README y actualizaciones automáticas.
 
@@ -39,7 +42,7 @@ central package management) y un proyecto de tests `AchievementDrift.Tests` (xUn
 | `AchievementDriftPlugin` | Punto de entrada. `IPlugin`, `IBotCommand2`, `IBotConnection`, `IGitHubPluginUpdates`, `IWebInterface`. Solo cablea las demás piezas. | todas |
 | `SteamStatsClient` | Lee esquema + estado de logros (`ClientGetUserStats`) y desbloquea (`ClientStoreUserStats2`) vía SteamKit2. Marca logros protegidos (permisos de servidor). | SteamKit2, `Bot` |
 | `GlobalPercentages` | Obtiene el % global de cada logro desde `ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2` (sin API key). Cache en memoria 24 h. | `Bot.ArchiWebHandler.WebBrowser` |
-| `GameSafetyFilter` | Decide si un appid es elegible: lista negra manual + detección de VAC vía `store.steampowered.com/api/appdetails` (categoría VAC, id 8). Cache persistente. | `WebBrowser`, `ConfigStore` |
+| `GameSafetyFilter` | Decide si un appid es elegible. Orden: `Blacklist` → excluido; `Allowlist` → incluido; si no, consulta `store.steampowered.com/api/appdetails?appids=X&filters=categories` y excluye si tiene VAC (id 8, con `ExcludeVac`) o categorías online (ids 1, 20, 27, 36, 38, 49, con `ExcludeOnline`). Cache persistente por appid. | `WebBrowser`, `ConfigStore` |
 | `PlanGenerator` | **Lógica pura.** Recibe logros (nombre, % global) + configuración + `Random`, devuelve un `Plan`. | nada |
 | `ActiveWindow` | **Lógica pura.** Dado un instante UTC, una franja `HH:mm-HH:mm` y una zona IANA, dice si está dentro del horario y cuántos minutos tiene la franja por día. Soporta franjas que cruzan medianoche. | nada |
 | `Scheduler` | Timer de 1 minuto. Para cada bot conectado y cada juego en reproducción: suma minutos activos y desbloquea lo que toca. | `ISteamStatsClient`, `IClock`, `PlanStore`, `ConfigStore` |
@@ -80,14 +83,18 @@ Se genera la primera vez que un juego elegible aparece en reproducción.
 Cada minuto, por cada bot conectado con `Enabled = true`:
 
 1. Si el instante actual está fuera de la franja (`ActiveWindow`) → no hace nada.
-2. Para cada appid que ASF está jugando y es elegible (`GameSafetyFilter`):
-   - Si no tiene plan → lo crea (paso 3).
-   - `activeMinutes += 1`.
-3. Como máximo **un desbloqueo por tick y por bot**: el logro pendiente con menor `offsetMinutes`
+2. Juegos en reproducción: si `CardsFarmer.NowFarming` → `CardsFarmer.CurrentGamesFarmingReadOnly`;
+   si no y `IsPlayingPossible` → `BotConfig.GamesPlayedWhileIdle`. Se filtran con `GameSafetyFilter`.
+3. Juegos activos: los que ya tienen plan sin completar y siguen en reproducción. Si hay menos de
+   `MaxActiveGames`, se eligen al azar nuevos juegos elegibles sin plan (o con plan pausado) hasta llenar
+   los huecos. Un juego activo que deja de jugarse libera su hueco y conserva su plan (pausado).
+   Juegos sin logros pendientes se marcan `Completed` y no vuelven a ocupar hueco.
+   - A cada juego activo: si no tiene plan → se crea; `activeMinutes += 1`.
+4. Como máximo **un desbloqueo por tick y por bot**: el logro pendiente con menor `offsetMinutes`
    cuyo `offsetMinutes ≤ activeMinutes` de su juego.
-4. Si `DryRun = true`, en vez de desbloquear registra `[DryRun] desbloquearía <logro> (<appid>)` y lo
+5. Si `DryRun = true`, en vez de desbloquear registra `[DryRun] desbloquearía <logro> (<appid>)` y lo
    marca como `Simulated` (no cuenta como obtenido; al pasar a modo real se replanifica).
-5. Persiste el estado tras cada cambio.
+6. Persiste el estado tras cada cambio.
 
 Al conectar el bot (`IBotConnection`) se recargan sus planes; al desconectar se pausa.
 
@@ -103,8 +110,11 @@ Archivo `plugins/AchievementDrift/config/<bot>.json`, editable desde la web/IPC:
 | `MaxDays` | `45` | Días máximos (techo del sorteo). Debe ser ≥ `MinDays`. |
 | `ActiveHours` | `"10:00-01:00"` | Franja horaria; puede cruzar medianoche. |
 | `TimeZone` | zona del servidor | Identificador IANA (ej. `America/Bogota`). |
+| `MaxActiveGames` | `2` | Juegos en progreso simultáneo (1–10). |
 | `ExcludeVac` | `true` | Excluye juegos con VAC. |
+| `ExcludeOnline` | `true` | Excluye juegos con categorías online/multijugador. |
 | `Blacklist` | `[]` | Appids excluidos siempre. |
+| `Allowlist` | `[]` | Appids incluidos siempre (salvo que estén en `Blacklist`). |
 
 Validación: valores inválidos se rechazan en el `PUT` con 400 y mensaje claro; un archivo corrupto en
 disco se ignora con un warning y se usan los valores por defecto.
@@ -178,6 +188,6 @@ luego activar modo real con un juego single-player barato.
 - **Build `linux-x64` recortada:** puede provocar `MissingMethodException`. Mitigación: probar; plan B, build `generic`.
 - **APIs internas de ASF** (`ArchiWebHandler`, `CardsFarmer`, mensajes de SteamKit2) pueden cambiar entre versiones.
   Mitigación: submódulo fijado a la versión del usuario; revisar changelogs al actualizar.
-- **Cómo obtener los juegos en reproducción:** se verificará en el código fuente de ASF 6.3.10.5 durante la
-  implementación cuál es la propiedad fiable (juegos de `GamesPlayedWhileIdle`, `!play` y farmeo de cromos).
+- **Categorías de tienda incompletas:** algunos juegos online no declaran categorías online. Mitigación: `Blacklist`.
+- **Logros validados por servidor no marcados como protegidos:** Steam puede rechazarlos; se marcan `Skipped`.
 - **SDK .NET 10** no instalado en el equipo de desarrollo; se instalará con permiso del usuario.
