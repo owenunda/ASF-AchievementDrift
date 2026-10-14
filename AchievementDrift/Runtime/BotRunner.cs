@@ -145,19 +145,24 @@ internal sealed class BotRunner : IAsyncDisposable {
 		List<uint> eligible = [];
 
 		foreach (uint appId in GetPlayingAppIds(Bot)) {
-			StoreInfo? info = SafetyRules.NeedsStoreInfo(appId, config) ? await DriftRuntime.Store.GetAsync(appId).ConfigureAwait(false) : null;
-			EEligibility eligibility = SafetyRules.Evaluate(appId, config, info);
+			// Un fallo en un juego no debe afectar a los demás (spec §7): se trata como no elegible en este tick
+			try {
+				StoreInfo? info = SafetyRules.NeedsStoreInfo(appId, config) ? await DriftRuntime.Store.GetAsync(appId).ConfigureAwait(false) : null;
+				EEligibility eligibility = SafetyRules.Evaluate(appId, config, info);
 
-			if (eligibility == EEligibility.Eligible) {
-				eligible.Add(appId);
-			}
-
-			if (!LoggedEligibility.TryGetValue(appId, out EEligibility previous) || (previous != eligibility)) {
-				LoggedEligibility[appId] = eligibility;
-
-				if (eligibility != EEligibility.Eligible) {
-					Bot.ArchiLogger.LogGenericInfo($"[AchievementDrift] Se excluye {info?.Name ?? appId.ToString(CultureInfo.InvariantCulture)} ({appId}): {SafetyRules.Describe(eligibility)}.");
+				if (eligibility == EEligibility.Eligible) {
+					eligible.Add(appId);
 				}
+
+				if (!LoggedEligibility.TryGetValue(appId, out EEligibility previous) || (previous != eligibility)) {
+					LoggedEligibility[appId] = eligibility;
+
+					if (eligibility != EEligibility.Eligible) {
+						Bot.ArchiLogger.LogGenericInfo($"[AchievementDrift] Se excluye {info?.Name ?? appId.ToString(CultureInfo.InvariantCulture)} ({appId}): {SafetyRules.Describe(eligibility)}.");
+					}
+				}
+			} catch (Exception e) {
+				Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al evaluar el juego {appId}; se ignora en este ciclo: {e.Message}");
 			}
 		}
 
@@ -211,11 +216,21 @@ internal sealed class BotRunner : IAsyncDisposable {
 			bool changed = result.StateChanged;
 
 			foreach (uint appId in result.GamesNeedingPlan) {
-				changed |= await TryCreatePlanAsync(appId, config, window, nowUtc).ConfigureAwait(false);
+				try {
+					changed |= await TryCreatePlanAsync(appId, config, window, nowUtc).ConfigureAwait(false);
+				} catch (Exception e) {
+					PlanRetryAfter[appId] = nowUtc + PlanRetryDelay;
+					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al crear el plan de {appId}; se reintentará en {PlanRetryDelay.TotalMinutes} minutos: {e.Message}");
+				}
 			}
 
 			if (result.Unlock != null) {
-				await ExecuteUnlockAsync(result.Unlock, config, window, nowUtc).ConfigureAwait(false);
+				try {
+					await ExecuteUnlockAsync(result.Unlock, config, window, nowUtc).ConfigureAwait(false);
+				} catch (Exception e) {
+					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al desbloquear un logro de {result.Unlock.AppId}; se reintentará en el próximo ciclo: {e.Message}");
+				}
+
 				changed = true;
 			}
 
