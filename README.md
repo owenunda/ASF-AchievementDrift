@@ -22,6 +22,28 @@ Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that
 - Games without store data or without the "Steam Achievements" category are excluded too; the `Allowlist` forces them in as well (and online games, but not VAC games while `ExcludeVac` is on).
 - **English and Spanish**: the web panel has an EN/ES switch; commands and log messages follow ASF's language (see [Language](#language)).
 
+## Screenshots
+
+**Web panel (`/drift/`)**: each game in progress with its cover, plan progress and next achievement.
+
+![Web panel with the games in progress](docs/images/panel-status.webp)
+
+<img src="docs/images/game-card.png" alt="A game card: state, achievements, plan progress and next achievement" width="320">
+
+**View achievements**: the game's full list, like Steam, with the global % of players and the state of each achievement in the plan.
+
+![Unlocked achievements of a game](docs/images/achievements-unlocked.png)
+
+![Locked achievements with their estimated unlock dates](docs/images/achievements-locked.png)
+
+**Configuration**: edited from the panel, applied immediately.
+
+![Configuration tab](docs/images/panel-config.png)
+
+**`!drift status`** from the ASF Commands page.
+
+![Output of the !drift status command](docs/images/command-status.png)
+
 ## How the algorithm works
 
 A game's plan is created the first time an eligible game shows up as being played:

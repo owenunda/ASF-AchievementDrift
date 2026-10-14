@@ -22,6 +22,28 @@ Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que
 - También se excluyen los juegos sin datos de tienda o sin la categoría «Logros de Steam»; la `Allowlist` los fuerza igualmente (también a los online, pero no a los VAC si `ExcludeVac` está activado).
 - **Inglés y español**: el panel web tiene un selector EN/ES; los comandos y el log siguen el idioma de ASF (ver [Idioma](#idioma)).
 
+## Capturas
+
+**Panel web (`/drift/`)**: cada juego en progreso con su carátula, el avance del plan y el siguiente logro.
+
+![Panel web con los juegos en progreso](docs/images/panel-status.webp)
+
+<img src="docs/images/game-card.png" alt="Tarjeta de un juego: estado, logros, avance del plan y siguiente logro" width="320">
+
+**Ver logros**: la lista completa del juego, como en Steam, con el % global de jugadores y el estado de cada logro en el plan.
+
+![Logros conseguidos de un juego](docs/images/achievements-unlocked.png)
+
+![Logros pendientes con su fecha estimada](docs/images/achievements-locked.png)
+
+**Configuración**: se edita desde el panel y se aplica al instante.
+
+![Pestaña de configuración](docs/images/panel-config.png)
+
+**`!drift status`** desde la página Comandos de ASF.
+
+![Salida del comando !drift status](docs/images/command-status.png)
+
 ## Cómo funciona el algoritmo
 
 El plan de un juego se crea la primera vez que un juego elegible aparece en reproducción:
