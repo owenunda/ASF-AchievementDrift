@@ -1,2 +1,81 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>AchievementDrift</title></head><body>AchievementDrift</body></html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>AchievementDrift</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<header>
+		<h1>AchievementDrift</h1>
+		<label>Bot <select id="bot"></select></label>
+		<nav>
+			<button data-tab="status" class="active">Estado</button>
+			<button data-tab="config">Configuración</button>
+			<button data-tab="help">Ayuda</button>
+		</nav>
+	</header>
+
+	<main>
+		<p id="message" role="status" hidden></p>
+
+		<section id="tab-status">
+			<div id="summary"></div>
+			<div id="games"></div>
+		</section>
+
+		<section id="tab-config" hidden>
+			<div id="tz-suggestion" hidden></div>
+			<form id="config-form">
+				<label><input type="checkbox" name="Enabled"> Activado</label>
+				<label><input type="checkbox" name="DryRun"> Modo simulación (DryRun): no desbloquea, solo registra</label>
+				<label>Días mínimos por juego <input type="number" name="MinDays" min="1" max="365" required></label>
+				<label>Días máximos por juego <input type="number" name="MaxDays" min="1" max="365" required></label>
+				<label>Horario activo (HH:mm-HH:mm) <input type="text" name="ActiveHours" pattern="\d{1,2}:\d{2}-\d{1,2}:\d{2}" required></label>
+				<label>Zona horaria (IANA, vacío = servidor) <input type="text" name="TimeZone" placeholder="America/Bogota"></label>
+				<label>Juegos en progreso a la vez <input type="number" name="MaxActiveGames" min="1" max="10" required></label>
+				<label><input type="checkbox" name="ExcludeVac"> Excluir juegos con VAC</label>
+				<label><input type="checkbox" name="ExcludeOnline"> Excluir juegos online/multijugador</label>
+				<label>Blacklist (appids separados por coma) <input type="text" name="Blacklist"></label>
+				<label>Allowlist (appids separados por coma) <input type="text" name="Allowlist"></label>
+				<button type="submit">Guardar</button>
+			</form>
+		</section>
+
+		<section id="tab-help" hidden>
+			<h2>¿Qué hace?</h2>
+			<p>Mientras ASF juega tus juegos (<code>GamesPlayedWhileIdle</code> o farmeo de cromos), AchievementDrift desbloquea sus logros poco a poco y en orden aleatorio, para que el progreso se vea natural.</p>
+			<h2>Cómo decide</h2>
+			<ul>
+				<li>Cada juego recibe un <b>plan</b> la primera vez que se juega. Los logros comunes tienden a salir antes y los raros (menor % global) al final, con más espera.</li>
+				<li>Un juego nunca se completa en menos de <b>días mínimos</b>: el reloj solo avanza mientras el juego se juega y dentro de tu <b>horario activo</b>.</li>
+				<li>Solo hay <b>N juegos en progreso</b> a la vez; los demás esperan su turno.</li>
+				<li>Como máximo se desbloquea un logro por minuto.</li>
+			</ul>
+			<h2>Leer el estado</h2>
+			<ul>
+				<li>▶️ Activo: avanzando ahora. ⏸️ Pausado: no se está jugando o espera turno. 🏁 Completado.</li>
+				<li>"% del plan" es el tiempo de juego acumulado frente al tiempo total planificado.</li>
+				<li>La hora estimada del siguiente logro supone que el juego se sigue jugando.</li>
+			</ul>
+			<h2>Opciones</h2>
+			<ul>
+				<li><b>DryRun</b>: viene activado. Revisa el log de ASF (líneas <code>[AchievementDrift][DryRun]</code>) y desactívalo cuando estés conforme. Al desactivarlo, los planes simulados se regeneran.</li>
+				<li><b>Excluir VAC / online</b>: usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</li>
+				<li><b>Allowlist</b>: fuerza un juego aunque la tienda lo marque como online (bajo tu responsabilidad).</li>
+			</ul>
+			<h2>Riesgos</h2>
+			<p>Modificar logros va contra los términos de Steam. En juegos con anti-cheat o estadísticas validadas por servidor puede haber sanciones dentro del juego. Los logros protegidos por servidor se saltan automáticamente.</p>
+			<h2>Problemas comunes</h2>
+			<ul>
+				<li><b>No aparece ningún plan</b>: comprueba que estás dentro del horario, que el juego está en <code>GamesPlayedWhileIdle</code> y que no está excluido (el log dice por qué).</li>
+				<li><b>Uso <code>!play</code></b>: no es detectable por plugins; usa <code>GamesPlayedWhileIdle</code>.</li>
+				<li><b>401</b>: la contraseña IPC es incorrecta; recarga la página para introducirla de nuevo.</li>
+			</ul>
+		</section>
+	</main>
+
+	<script src="app.js"></script>
+</body>
+</html>
