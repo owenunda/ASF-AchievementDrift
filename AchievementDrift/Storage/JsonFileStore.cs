@@ -37,9 +37,22 @@ internal static class JsonFileStore {
 		Directory.CreateDirectory(DataDirectory);
 
 		string path = Path.Combine(DataDirectory, fileName);
-		string temporaryPath = $"{path}.tmp";
+		// Nombre temporal único: dos guardados simultáneos del mismo archivo no se pisan el temporal
+		string temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
 
-		await File.WriteAllTextAsync(temporaryPath, value.ToJsonText(true)).ConfigureAwait(false);
-		File.Move(temporaryPath, path, true);
+		try {
+			await File.WriteAllTextAsync(temporaryPath, value.ToJsonText(true)).ConfigureAwait(false);
+			File.Move(temporaryPath, path, true);
+		} catch {
+			try {
+				File.Delete(temporaryPath);
+			} catch (IOException) {
+				// Si tampoco se puede borrar, se queda el temporal; el error original es el importante
+			} catch (UnauthorizedAccessException) {
+				// Ídem
+			}
+
+			throw;
+		}
 	}
 }
