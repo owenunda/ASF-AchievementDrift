@@ -10,7 +10,6 @@ internal sealed record TickResult(IReadOnlyList<uint> GamesNeedingPlan, UnlockDe
 	internal static readonly TickResult Idle = new([], null, false);
 }
 
-#pragma warning disable CA1812 // Instanciado por el plugin en un paso posterior
 internal sealed class DriftEngine(Random random) {
 	private readonly Random Random = random ?? throw new ArgumentNullException(nameof(random));
 
@@ -98,4 +97,3 @@ internal sealed class DriftEngine(Random random) {
 		return chosen.Count > 0;
 	}
 }
-#pragma warning restore CA1812 // Instanciado por el plugin en un paso posterior

@@ -38,9 +38,7 @@ internal sealed class GamePlan {
 	public PlannedAchievement? GetNextPending() => Entries.Where(static entry => entry.State == EEntryState.Pending).MinBy(static entry => entry.OffsetMinutes);
 }
 
-#pragma warning disable CA1812 // Instanciado por la deserialización JSON y por el plugin
 internal sealed class BotState {
 	public Dictionary<uint, GamePlan> Plans { get; set; } = [];
 	public List<uint> ActiveGames { get; set; } = [];
 }
-#pragma warning restore CA1812 // Instanciado por la deserialización JSON y por el plugin

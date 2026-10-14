@@ -11,7 +11,6 @@ namespace AchievementDrift.Steam;
 
 internal sealed record StatsSnapshot(IReadOnlyList<SchemaAchievement> Achievements, IReadOnlyDictionary<uint, uint> StatValues, uint CrcStats);
 
-#pragma warning disable CA1812 // Instanciado por el plugin en un paso posterior
 internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 	private readonly Bot Bot = bot ?? throw new ArgumentNullException(nameof(bot));
 
@@ -148,4 +147,3 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 		}
 	}
 }
-#pragma warning restore CA1812 // Instanciado por el plugin en un paso posterior
