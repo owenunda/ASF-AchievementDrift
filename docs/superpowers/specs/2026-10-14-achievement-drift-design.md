@@ -71,7 +71,7 @@ Se genera la primera vez que un juego elegible aparece en reproducción.
 
 ### Mantenimiento del plan
 
-- Logro desbloqueado fuera del plugin → se elimina del plan.
+- Logro desbloqueado fuera del plugin → se marca `Unlocked` al sincronizar (antes de cada desbloqueo).
 - Steam rechaza el desbloqueo → se marca `Skipped` y se registra en el log.
 - El juego añade logros nuevos → se generan con el mismo método y se añaden **después** del último
   logro pendiente, con presupuesto proporcional.
@@ -129,14 +129,17 @@ disco se ignora con un warning y se usan los valores por defecto.
 
 ### Comandos (permiso `Master`)
 
-- `!drift status [bot]` — progreso por juego, próximo logro y ETA.
-- `!drift on|off [bot]` — cambia `Enabled`.
-- `!drift plan <appid> [bot]` — muestra el plan sin desbloquear.
-- `!drift replan <appid> [bot]` — regenera el plan de un juego.
+Actúan sobre el bot que recibe el comando.
+
+- `!drift status` — progreso por juego, próximo logro y ETA.
+- `!drift on|off` — cambia `Enabled`.
+- `!drift plan <appid>` — muestra el plan sin desbloquear.
+- `!drift replan <appid>` — regenera el plan de un juego.
 
 ### IPC (protegido por `IPCPassword` de ASF, visible en Swagger)
 
-- `GET /Api/Drift/{botNames}` — estado: juegos, logros obtenidos/total, % del plan, días transcurridos,
+- `GET /Api/Drift/Bots` — nombres de los bots (para el selector de la web).
+- `GET /Api/Drift/{botName}` — estado: juegos, logros obtenidos/total, % del plan, días transcurridos,
   próximo logro (nombre, % global, ETA estimada).
 - `GET /Api/Drift/{botName}/Config` — configuración.
 - `PUT /Api/Drift/{botName}/Config` — guarda configuración (validada).
