@@ -14,18 +14,34 @@ using ArchiSteamFarm.Steam;
 namespace AchievementDrift.Runtime;
 
 internal sealed class BotRunner : IAsyncDisposable {
-	private static readonly TimeSpan PlanRetryDelay = TimeSpan.FromMinutes(30);
+	private const int MaxPercentFailures = 3;
+	private const int MaxUnlockFailures = 5;
+	private const int RetryMinutes = 30;
+
+	private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(RetryMinutes);
 	private static readonly TimeSpan TickPeriod = TimeSpan.FromMinutes(1);
 
 	private readonly Bot Bot;
+
+	// Juegos con errores repetidos: no ocupan hueco ni desbloquean hasta la hora indicada (spec §7). Solo se usa con StateLock.
+	private readonly Dictionary<uint, DateTime> CooldownUntil = [];
+
 	private readonly DriftEngine Engine = new(Random.Shared);
 	private readonly ConcurrentDictionary<uint, EEligibility> LoggedEligibility = new();
-	private readonly ConcurrentDictionary<uint, DateTime> PlanRetryAfter = new();
+
+	// Fallos consecutivos al obtener los porcentajes globales al crear un plan. Solo se usa con StateLock.
+	private readonly Dictionary<uint, int> PercentFailures = [];
+
 	// No se desecha a propósito: un tick o una consulta de estado en curso aún puede liberarlo tras DisposeAsync
 	[SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "A tick or status query still in flight may release it after DisposeAsync")]
 	private readonly SemaphoreSlim StateLock = new(1, 1);
 
 	private readonly BotState State;
+
+	// Fallos consecutivos al desbloquear, por juego (y logro afectado). Solo se usa con StateLock.
+	private readonly Dictionary<uint, (string ApiName, int Count)> UnlockFailures = [];
+
+	private bool Disposed;
 	private Timer? Timer;
 
 	private BotRunner(Bot bot, BotState state) {
@@ -52,16 +68,35 @@ internal sealed class BotRunner : IAsyncDisposable {
 			await Timer.DisposeAsync().ConfigureAwait(false);
 			Timer = null;
 		}
-	}
 
-	internal async Task ReplanAsync(uint appId) {
+		// Esperamos a que termine un tick en curso y marcamos el runner como desechado: a partir de aquí no guarda nada,
+		// así no puede pisar el estado que cargue un runner nuevo. No retenemos el lock para no colgar consultas de estado
+		// que todavía tengan una referencia a este runner.
 		await StateLock.WaitAsync().ConfigureAwait(false);
 
 		try {
+			Disposed = true;
+		} finally {
+			StateLock.Release();
+		}
+	}
+
+	internal async Task<bool> ReplanAsync(uint appId) {
+		await StateLock.WaitAsync().ConfigureAwait(false);
+
+		try {
+			if (Disposed) {
+				return false;
+			}
+
 			State.Plans.Remove(appId);
 			State.ActiveGames.Remove(appId);
-			PlanRetryAfter.TryRemove(appId, out _);
+			CooldownUntil.Remove(appId);
+			PercentFailures.Remove(appId);
+			UnlockFailures.Remove(appId);
 			await JsonFileStore.SaveAsync(StateFileName(Bot.BotName), State).ConfigureAwait(false);
+
+			return true;
 		} finally {
 			StateLock.Release();
 		}
@@ -88,29 +123,29 @@ internal sealed class BotRunner : IAsyncDisposable {
 		return bot.IsPlayingPossible ? bot.BotConfig.GamesPlayedWhileIdle.ToHashSet() : [];
 	}
 
-	private async Task ExecuteUnlockAsync(UnlockDecision decision, DriftConfig config, ActiveWindow window, DateTime nowUtc) {
+	// Devuelve false si hubo un error transitorio (Steam no respondió): el logro sigue pendiente y se reintenta más tarde
+	private async Task<bool> ExecuteUnlockAsync(UnlockDecision decision, DriftConfig config, ActiveWindow window, DateTime nowUtc) {
 		GamePlan plan = State.Plans[decision.AppId];
 		PlannedAchievement entry = decision.Entry;
 
 		if (config.DryRun) {
-			DriftEngine.ApplyResult(entry, EEntryState.Simulated, nowUtc);
+			DriftEngine.RecordUnlock(plan, entry, EEntryState.Simulated, nowUtc);
 			Bot.ArchiLogger.LogGenericInfo($"[AchievementDrift][DryRun] Desbloquearía \"{entry.DisplayName}\" ({entry.GlobalPercent.ToString("0.#", CultureInfo.InvariantCulture)}%) en {plan.GameName}");
 
-			return;
+			return true;
 		}
 
 		StatsHandler? handler = DriftRuntime.GetHandler(Bot);
 		StatsSnapshot? snapshot = handler == null ? null : await handler.GetAsync(decision.AppId).ConfigureAwait(false);
 
 		if ((handler == null) || (snapshot == null)) {
-			// Se reintenta en el próximo tick: el logro sigue vencido
-			return;
+			return false;
 		}
 
 		await SyncPlanAsync(plan, snapshot, config, window).ConfigureAwait(false);
 
 		if (entry.State != EEntryState.Pending) {
-			return;
+			return true;
 		}
 
 		SchemaAchievement? target = snapshot.Achievements.FirstOrDefault(achievement => achievement.ApiName == entry.ApiName);
@@ -119,26 +154,34 @@ internal sealed class BotRunner : IAsyncDisposable {
 			DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
 			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] \"{entry.DisplayName}\" en {plan.GameName} ya no existe o está protegido; se salta.");
 
-			return;
+			return true;
 		}
 
 		bool? success = await handler.UnlockAsync(decision.AppId, target, snapshot).ConfigureAwait(false);
 
 		switch (success) {
 			case true:
-				DriftEngine.ApplyResult(entry, EEntryState.Unlocked, nowUtc);
+				DriftEngine.RecordUnlock(plan, entry, EEntryState.Unlocked, nowUtc);
 				Bot.ArchiLogger.LogGenericInfo($"[AchievementDrift] Logro desbloqueado: \"{entry.DisplayName}\" ({entry.GlobalPercent.ToString("0.#", CultureInfo.InvariantCulture)}%) en {plan.GameName}");
 
-				break;
+				return true;
 			case false:
 				DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
 				Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam rechazó \"{entry.DisplayName}\" en {plan.GameName}; se salta.");
 
-				break;
+				return true;
 			default:
-				// Error de red: se reintenta en el próximo tick
-				break;
+				// Error de red o respuesta transitoria de Steam
+				return false;
 		}
+	}
+
+	private HashSet<uint> GetCoolingDown(DateTime nowUtc) {
+		foreach (uint appId in CooldownUntil.Where(pair => pair.Value <= nowUtc).Select(static pair => pair.Key).ToList()) {
+			CooldownUntil.Remove(appId);
+		}
+
+		return [.. CooldownUntil.Keys];
 	}
 
 	private async Task<IReadOnlyCollection<uint>> GetEligiblePlayingAsync(DriftConfig config) {
@@ -170,6 +213,32 @@ internal sealed class BotRunner : IAsyncDisposable {
 	}
 
 	private void OnTimer(object? state) => _ = TickAsync();
+
+	private void RegisterUnlockFailure(UnlockDecision decision, DateTime nowUtc) {
+		PlannedAchievement entry = decision.Entry;
+		int count = UnlockFailures.TryGetValue(decision.AppId, out (string ApiName, int Count) previous) && (previous.ApiName == entry.ApiName) ? previous.Count + 1 : 1;
+		string gameName = State.Plans.TryGetValue(decision.AppId, out GamePlan? plan) ? plan.GameName : decision.AppId.ToString(CultureInfo.InvariantCulture);
+
+		// El juego deja su hueco a otros mientras tanto; su plan queda en pausa
+		StartCooldown(decision.AppId, nowUtc);
+
+		if (count < MaxUnlockFailures) {
+			UnlockFailures[decision.AppId] = (entry.ApiName, count);
+			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudo desbloquear \"{entry.DisplayName}\" en {gameName} (intento {count}/{MaxUnlockFailures}); el juego queda en espera {RetryMinutes} minutos.");
+
+			return;
+		}
+
+		UnlockFailures.Remove(decision.AppId);
+
+		if (entry.State == EEntryState.Pending) {
+			DriftEngine.ApplyResult(entry, EEntryState.Skipped, nowUtc);
+		}
+
+		Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] \"{entry.DisplayName}\" en {gameName} falló {MaxUnlockFailures} veces seguidas; se salta.");
+	}
+
+	private void StartCooldown(uint appId, DateTime nowUtc) => CooldownUntil[appId] = nowUtc + RetryDelay;
 
 	private async Task SyncPlanAsync(GamePlan plan, StatsSnapshot snapshot, DriftConfig config, ActiveWindow window) {
 		Dictionary<string, SchemaAchievement> byName = snapshot.Achievements.DistinctBy(static achievement => achievement.ApiName).ToDictionary(static achievement => achievement.ApiName, StringComparer.Ordinal);
@@ -203,32 +272,42 @@ internal sealed class BotRunner : IAsyncDisposable {
 		}
 
 		try {
-			if (!Bot.IsConnectedAndLoggedOn) {
+			if (Disposed || !Bot.IsConnectedAndLoggedOn) {
 				return;
 			}
 
 			DriftConfig config = await DriftRuntime.Configs.GetAsync(Bot.BotName).ConfigureAwait(false);
 			ActiveWindow window = ActiveWindow.FromConfig(config);
 			DateTime nowUtc = DateTime.UtcNow;
+			HashSet<uint> coolingDown = GetCoolingDown(nowUtc);
 
 			IReadOnlyCollection<uint> eligible = config.Enabled ? await GetEligiblePlayingAsync(config).ConfigureAwait(false) : [];
-			TickResult result = Engine.Tick(State, nowUtc, eligible, config, window);
+			TickResult result = Engine.Tick(State, nowUtc, eligible, coolingDown, config, window);
 			bool changed = result.StateChanged;
 
 			foreach (uint appId in result.GamesNeedingPlan) {
 				try {
 					changed |= await TryCreatePlanAsync(appId, config, window, nowUtc).ConfigureAwait(false);
 				} catch (Exception e) {
-					PlanRetryAfter[appId] = nowUtc + PlanRetryDelay;
-					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al crear el plan de {appId}; se reintentará en {PlanRetryDelay.TotalMinutes} minutos: {e.Message}");
+					StartCooldown(appId, nowUtc);
+					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al crear el plan de {appId}; se reintentará en {RetryMinutes} minutos: {e.Message}");
 				}
 			}
 
 			if (result.Unlock != null) {
+				bool handled;
+
 				try {
-					await ExecuteUnlockAsync(result.Unlock, config, window, nowUtc).ConfigureAwait(false);
+					handled = await ExecuteUnlockAsync(result.Unlock, config, window, nowUtc).ConfigureAwait(false);
 				} catch (Exception e) {
-					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al desbloquear un logro de {result.Unlock.AppId}; se reintentará en el próximo ciclo: {e.Message}");
+					handled = false;
+					Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Error al desbloquear un logro de {result.Unlock.AppId}: {e.Message}");
+				}
+
+				if (handled) {
+					UnlockFailures.Remove(result.Unlock.AppId);
+				} else {
+					RegisterUnlockFailure(result.Unlock, nowUtc);
 				}
 
 				changed = true;
@@ -245,20 +324,35 @@ internal sealed class BotRunner : IAsyncDisposable {
 	}
 
 	private async Task<bool> TryCreatePlanAsync(uint appId, DriftConfig config, ActiveWindow window, DateTime nowUtc) {
-		if (PlanRetryAfter.TryGetValue(appId, out DateTime retryAfter) && (retryAfter > nowUtc)) {
-			return false;
-		}
-
 		StatsHandler? handler = DriftRuntime.GetHandler(Bot);
 		StatsSnapshot? snapshot = handler == null ? null : await handler.GetAsync(appId).ConfigureAwait(false);
-		Dictionary<string, double>? percents = snapshot == null ? null : await DriftRuntime.Percents.GetAsync(appId).ConfigureAwait(false);
 
-		if ((snapshot == null) || (percents == null)) {
-			PlanRetryAfter[appId] = nowUtc + PlanRetryDelay;
-			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudieron obtener los logros de {appId}; se reintentará en {PlanRetryDelay.TotalMinutes} minutos.");
+		if (snapshot == null) {
+			StartCooldown(appId, nowUtc);
+			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudieron obtener los logros de {appId}; se reintentará en {RetryMinutes} minutos.");
 
 			return false;
 		}
+
+		Dictionary<string, double>? percents = await DriftRuntime.Percents.GetAsync(appId).ConfigureAwait(false);
+
+		if (percents == null) {
+			int failures = PercentFailures.GetValueOrDefault(appId) + 1;
+
+			if (failures < MaxPercentFailures) {
+				PercentFailures[appId] = failures;
+				StartCooldown(appId, nowUtc);
+				Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudieron obtener los porcentajes globales de {appId} (intento {failures}/{MaxPercentFailures}); se reintentará en {RetryMinutes} minutos.");
+
+				return false;
+			}
+
+			// Spec §3.1: sin porcentaje se usa el 50 % (PlanGenerator.NormalizePercent con NaN)
+			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] No se pudieron obtener los porcentajes globales de {appId} tras {MaxPercentFailures} intentos; se crea el plan suponiendo un 50 % para cada logro.");
+			percents = [];
+		}
+
+		PercentFailures.Remove(appId);
 
 		List<AchievementInfo> pending = snapshot.Achievements
 			.Where(static achievement => !achievement.IsUnlocked && !achievement.IsProtected)

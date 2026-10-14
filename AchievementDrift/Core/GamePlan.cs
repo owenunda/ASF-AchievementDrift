@@ -27,6 +27,9 @@ internal sealed class GamePlan {
 	public DateTime CreatedAtUtc { get; set; }
 	public bool CreatedInDryRun { get; set; }
 	public long ActiveMinutes { get; set; }
+
+	// Minutos activos del plan en el último desbloqueo (real o simulado); null = todavía ninguno
+	public long? LastUnlockActiveMinutes { get; set; }
 	public List<PlannedAchievement> Entries { get; set; } = [];
 
 	[JsonIgnore]

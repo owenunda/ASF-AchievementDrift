@@ -20,9 +20,20 @@ internal sealed class DriftEngine(Random random) {
 		entry.DoneAtUtc = nowUtc;
 	}
 
-	internal TickResult Tick(BotState state, DateTime nowUtc, IReadOnlyCollection<uint> eligiblePlaying, DriftConfig config, ActiveWindow window) {
+	internal static void RecordUnlock(GamePlan plan, PlannedAchievement entry, EEntryState state, DateTime nowUtc) {
+		ArgumentNullException.ThrowIfNull(plan);
+
+		ApplyResult(entry, state, nowUtc);
+
+		if (state is EEntryState.Unlocked or EEntryState.Simulated) {
+			plan.LastUnlockActiveMinutes = plan.ActiveMinutes;
+		}
+	}
+
+	internal TickResult Tick(BotState state, DateTime nowUtc, IReadOnlyCollection<uint> eligiblePlaying, IReadOnlySet<uint> coolingDown, DriftConfig config, ActiveWindow window) {
 		ArgumentNullException.ThrowIfNull(state);
 		ArgumentNullException.ThrowIfNull(eligiblePlaying);
+		ArgumentNullException.ThrowIfNull(coolingDown);
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(window);
 
@@ -32,7 +43,8 @@ internal sealed class DriftEngine(Random random) {
 			return changed ? new TickResult([], null, true) : TickResult.Idle;
 		}
 
-		HashSet<uint> playing = [.. eligiblePlaying];
+		// Los juegos en espera por errores repetidos no ocupan hueco: su plan queda en pausa (spec §7)
+		HashSet<uint> playing = [.. eligiblePlaying.Where(appId => !coolingDown.Contains(appId))];
 
 		changed |= state.ActiveGames.RemoveAll(appId => !playing.Contains(appId) || (state.Plans.TryGetValue(appId, out GamePlan? plan) && plan.IsCompleted)) > 0;
 
@@ -54,7 +66,7 @@ internal sealed class DriftEngine(Random random) {
 			}
 		}
 
-		return new TickResult(needPlan, FindDue(state), changed);
+		return new TickResult(needPlan, FindDue(state, coolingDown), changed);
 	}
 
 	private static bool DropDryRunPlans(BotState state, DriftConfig config) {
@@ -73,9 +85,13 @@ internal sealed class DriftEngine(Random random) {
 		return simulated.Count > 0;
 	}
 
-	private static UnlockDecision? FindDue(BotState state) => state.ActiveGames
-		.Where(state.Plans.ContainsKey)
+	// Aunque haya varios logros vencidos (p. ej. tras una pausa), un juego no desbloquea dos veces en menos de MinGapMinutes de su propio juego
+	private static bool IsInMinGap(GamePlan plan) => plan.LastUnlockActiveMinutes is long last && (plan.ActiveMinutes - last < PlanGenerator.MinGapMinutes);
+
+	private static UnlockDecision? FindDue(BotState state, IReadOnlySet<uint> coolingDown) => state.ActiveGames
+		.Where(appId => !coolingDown.Contains(appId) && state.Plans.ContainsKey(appId))
 		.Select(appId => state.Plans[appId])
+		.Where(static plan => !IsInMinGap(plan))
 		.SelectMany(static plan => plan.Entries.Where(entry => (entry.State == EEntryState.Pending) && (entry.OffsetMinutes <= plan.ActiveMinutes)).Select(entry => new UnlockDecision(plan.AppId, entry)))
 		.MinBy(static decision => decision.Entry.OffsetMinutes);
 

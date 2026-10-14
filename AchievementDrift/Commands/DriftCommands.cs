@@ -37,11 +37,9 @@ internal static class DriftCommands {
 	private static async Task<string> ReplanAsync(Bot bot, uint appId) {
 		BotRunner? runner = DriftRuntime.GetRunner(bot);
 
-		if (runner == null) {
+		if ((runner == null) || !await runner.ReplanAsync(appId).ConfigureAwait(false)) {
 			return "El bot no está conectado.";
 		}
-
-		await runner.ReplanAsync(appId).ConfigureAwait(false);
 
 		return $"Plan de {appId} eliminado; se regenerará cuando el juego vuelva a estar activo.";
 	}

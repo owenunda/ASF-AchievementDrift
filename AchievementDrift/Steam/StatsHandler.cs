@@ -114,16 +114,36 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 
 		Client.Send(request);
 
-		try {
-			StoreStatsCallback callback = await new AsyncJob<StoreStatsCallback>(Client, request.SourceJobID).ToLongRunningTask().ConfigureAwait(false);
+		StoreStatsCallback callback;
 
-			return (EResult) callback.Response.eresult == EResult.OK;
+		try {
+			callback = await new AsyncJob<StoreStatsCallback>(Client, request.SourceJobID).ToLongRunningTask().ConfigureAwait(false);
 		} catch (Exception e) {
 			Bot.ArchiLogger.LogGenericWarningException(e);
 
 			return null;
 		}
+
+		EResult result = (EResult) callback.Response.eresult;
+
+		if (result == EResult.OK) {
+			return true;
+		}
+
+		if (IsTransient(result)) {
+			// Error temporal de Steam: el logro sigue pendiente y se reintenta más tarde
+			Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam no pudo guardar el logro de {appId} por un error temporal: {result}");
+
+			return null;
+		}
+
+		Bot.ArchiLogger.LogGenericWarning($"[AchievementDrift] Steam rechazó guardar el logro de {appId}: {result}");
+
+		return false;
 	}
+
+	// Respuestas que indican un problema pasajero de Steam o de la conexión, no un rechazo del logro
+	private static bool IsTransient(EResult result) => result is EResult.Busy or EResult.ServiceUnavailable or EResult.Timeout or EResult.RateLimitExceeded or EResult.TryAnotherCM or EResult.NoConnection;
 
 	private sealed class GetStatsCallback : CallbackMsg {
 		internal CMsgClientGetUserStatsResponse Response { get; }
