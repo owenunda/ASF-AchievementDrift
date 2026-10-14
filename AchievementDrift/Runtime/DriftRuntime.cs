@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using AchievementDrift.Core;
 using AchievementDrift.Steam;
@@ -14,6 +15,10 @@ internal static class DriftRuntime {
 	internal static readonly StoreCache Store = new();
 
 	private static readonly ConcurrentDictionary<Bot, StatsHandler> Handlers = new();
+
+	// Serializa arranque/parada por bot: un logon y una desconexión solapados no pueden dejar un runner huérfano
+	private static readonly ConcurrentDictionary<string, SemaphoreSlim> LifecycleLocks = new(StringComparer.Ordinal);
+
 	private static readonly ConcurrentDictionary<Bot, BotRunner> Runners = new();
 
 	internal static StatsHandler? GetHandler(Bot bot) => Handlers.TryGetValue(bot, out StatsHandler? handler) ? handler : null;
@@ -43,20 +48,40 @@ internal static class DriftRuntime {
 	internal static async Task StartAsync(Bot bot) {
 		ArgumentNullException.ThrowIfNull(bot);
 
-		await StopAsync(bot).ConfigureAwait(false);
-		Runners[bot] = await BotRunner.StartAsync(bot).ConfigureAwait(false);
+		SemaphoreSlim lifecycleLock = GetLifecycleLock(bot);
+		await lifecycleLock.WaitAsync().ConfigureAwait(false);
+
+		try {
+			await StopRunnerAsync(bot).ConfigureAwait(false);
+			Runners[bot] = await BotRunner.StartAsync(bot).ConfigureAwait(false);
+		} finally {
+			lifecycleLock.Release();
+		}
 	}
 
 	internal static async Task StopAsync(Bot bot) {
 		ArgumentNullException.ThrowIfNull(bot);
 
-		if (Runners.TryRemove(bot, out BotRunner? runner)) {
-			await runner.DisposeAsync().ConfigureAwait(false);
+		SemaphoreSlim lifecycleLock = GetLifecycleLock(bot);
+		await lifecycleLock.WaitAsync().ConfigureAwait(false);
+
+		try {
+			await StopRunnerAsync(bot).ConfigureAwait(false);
+		} finally {
+			lifecycleLock.Release();
 		}
 	}
 
 	internal static async Task UnregisterAsync(Bot bot) {
 		await StopAsync(bot).ConfigureAwait(false);
 		Handlers.TryRemove(bot, out _);
+	}
+
+	private static SemaphoreSlim GetLifecycleLock(Bot bot) => LifecycleLocks.GetOrAdd(bot.BotName, static _ => new SemaphoreSlim(1, 1));
+
+	private static async Task StopRunnerAsync(Bot bot) {
+		if (Runners.TryRemove(bot, out BotRunner? runner)) {
+			await runner.DisposeAsync().ConfigureAwait(false);
+		}
 	}
 }
