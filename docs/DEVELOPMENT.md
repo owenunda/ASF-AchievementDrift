@@ -136,8 +136,11 @@ En Release el análisis estricto de ASF convierte los warnings en errores; compi
 2. Haz commit.
 3. Crea el tag `git tag X.Y.Z.W`; **debe coincidir con `Version`**.
 4. `git push --tags`.
-5. El workflow `.github/workflows/publish.yml` compila, genera `AchievementDrift.zip` y crea el release (pre-release) usando `.github/RELEASE_TEMPLATE.md` como cuerpo.
-6. ASF actualiza el plugin por su cuenta gracias a `IGitHubPluginUpdates` (`RepositoryName = "owenunda/ASF-AchievementDrift"`), según los ajustes `PluginsUpdateMode` y `PluginsUpdateList` de ASF.
+5. El workflow `.github/workflows/publish.yml` compila, genera `AchievementDrift.zip` y crea el release usando `.github/RELEASE_TEMPLATE.md` como cuerpo. Lo crea como **pre-release** y sin marcarlo como «latest» (`prerelease: true`, `makeLatest: false`).
+6. **Promociona el release a mano.** Primero verifica el release: instala el zip en un ASF de prueba (con `DryRun = true`) y comprueba que carga y funciona. Después, en GitHub, edita el release, **desmarca «Set as a pre-release»** y **marca «Set as the latest release»**.
+   - Hasta entonces, el release solo lo ven las instancias de ASF con `UpdateChannel` = `PreRelease` (esas piden el release más reciente aunque sea pre-release). Con el canal por defecto, `Stable`, ASF consulta `/releases/latest`, y GitHub excluye de «latest» los pre-releases.
+   - La actualización automática además depende de la configuración global de ASF (`ASF.json`): `PluginsUpdateMode` (`Whitelist` por defecto) y `PluginsUpdateList` (vacía por defecto). Con esos valores ningún plugin se actualiza solo: el usuario debe añadir `AchievementDrift` (el nombre del ensamblado) a `PluginsUpdateList` en modo `Whitelist`, o usar el modo `Blacklist` (se actualizan todos los plugins que no estén en la lista).
+7. Con el release promocionado y el plugin habilitado para actualizaciones, ASF lo actualiza por su cuenta gracias a `IGitHubPluginUpdates` (`RepositoryName = "owenunda/ASF-AchievementDrift"`).
 
 ## 6. Actualizar ASF
 

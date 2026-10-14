@@ -40,7 +40,7 @@ Cada minuto (un «tick») el plugin suma un minuto activo a los juegos en progre
 
 ## Instalación
 
-1. Descarga `AchievementDrift.zip` del [último release](https://github.com/owenunda/ASF-AchievementDrift/releases).
+1. Descarga `AchievementDrift.zip` del [último release](https://github.com/owenunda/ASF-AchievementDrift/releases). Los releases marcados como *pre-release* son versiones de prueba.
 2. Extrae el contenido en `plugins/AchievementDrift/` dentro de tu carpeta de ASF.
 3. Reinicia ASF.
 4. Comprueba en el log la línea `AchievementDrift ... cargado` y que el plugin aparece en la pestaña **Plugins** del panel de ASF.

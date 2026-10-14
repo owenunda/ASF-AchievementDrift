@@ -1,6 +1,6 @@
 ### ASF-AchievementDrift
 
-Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que desbloquea logros de forma gradual y realista mientras farmeas horas. Esta es una versión de prueba (pre-release).
+Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que desbloquea logros de forma gradual y realista mientras farmeas horas.
 
 ### Instalación
 
