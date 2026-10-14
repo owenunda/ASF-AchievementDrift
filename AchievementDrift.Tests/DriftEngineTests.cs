@@ -134,6 +134,30 @@ public sealed class DriftEngineTests {
 	}
 
 	[TestMethod]
+	public void RealPlanWithSimulatedEntriesIsDroppedWhenSwitchingToRealMode() {
+		GamePlan plan = Plan(1, 200, 100, 300);
+		plan.Entries[0].State = EEntryState.Simulated;
+		BotState state = new() { Plans = { [1] = plan }, ActiveGames = { 1 } };
+
+		TickResult result = Engine().Tick(state, Now, [1], Config with { DryRun = false }, AlwaysOn);
+
+		Assert.IsFalse(state.Plans.ContainsKey(1));
+		CollectionAssert.Contains(result.GamesNeedingPlan.ToList(), 1u);
+	}
+
+	[TestMethod]
+	public void RealPlanWithSimulatedEntriesIsKeptWhileInDryRun() {
+		GamePlan plan = Plan(1, 200, 100, 300);
+		plan.Entries[0].State = EEntryState.Simulated;
+		BotState state = new() { Plans = { [1] = plan }, ActiveGames = { 1 } };
+
+		TickResult result = Engine().Tick(state, Now, [1], Config with { DryRun = true }, AlwaysOn);
+
+		Assert.AreSame(plan, state.Plans[1]);
+		Assert.AreEqual(0, result.GamesNeedingPlan.Count);
+	}
+
+	[TestMethod]
 	public void ApplyResultSetsStateAndTime() {
 		PlannedAchievement entry = new();
 

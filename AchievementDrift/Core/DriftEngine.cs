@@ -62,7 +62,8 @@ internal sealed class DriftEngine(Random random) {
 			return false;
 		}
 
-		List<uint> simulated = state.Plans.Values.Where(static plan => plan.CreatedInDryRun).Select(static plan => plan.AppId).ToList();
+		// También los planes reales con entradas simuladas durante una pausa en DryRun: se regeneran desde el estado real de Steam (spec §4.5)
+		List<uint> simulated = state.Plans.Values.Where(static plan => plan.CreatedInDryRun || plan.Entries.Exists(static entry => entry.State == EEntryState.Simulated)).Select(static plan => plan.AppId).ToList();
 
 		foreach (uint appId in simulated) {
 			state.Plans.Remove(appId);

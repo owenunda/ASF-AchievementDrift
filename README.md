@@ -65,7 +65,7 @@ Con `UpdateChannel` = `Stable` (el valor por defecto) ASF solo toma los releases
 2. Introduce el `IPCPassword` de ASF (se guarda en el navegador).
 3. Acepta la zona horaria que detecta la página, o ajusta la tuya.
 4. Deja `DryRun` activo y revisa el log: verás líneas `[AchievementDrift][DryRun] Desbloquearía "..." ...`.
-5. Cuando estés conforme, desactiva `DryRun`. Los planes creados durante el modo simulado se descartan y se vuelven a generar en modo real.
+5. Cuando estés conforme, desactiva `DryRun`. Mientras está activo, el estado muestra los logros simulados como hechos (solo para que veas el avance; en Steam no se obtiene nada). Al desactivarlo, todo plan con logros simulados se descarta y se vuelve a generar en modo real desde el estado real de Steam.
 
 ## Configuración
 
