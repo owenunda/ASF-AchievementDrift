@@ -62,7 +62,7 @@ internal static class PlanGenerator {
 		return plan;
 	}
 
-	internal static double NormalizePercent(double percent) => double.IsNaN(percent) ? DefaultPercent : Math.Clamp(percent, MinPercent, 100);
+	internal static double NormalizePercent(double percent) => double.IsNaN(percent) ? DefaultPercent : Math.Min(100, Math.Max(MinPercent, percent));
 
 	private static List<PlannedAchievement> Schedule(IReadOnlyList<AchievementInfo> items, long budgetMinutes, long startOffset, Random random) {
 		// Orden aleatorio ponderado (Efraimidis-Spirakis): clave U^(1/p), mayor primero. Los comunes tienden a salir antes.
@@ -74,7 +74,13 @@ internal static class PlanGenerator {
 
 		// Hueco previo proporcional a 1/sqrt(p) con jitter, escalado para sumar el presupuesto
 		double[] gaps = ordered.Select(entry => (1 / Math.Sqrt(entry.Percent)) * (0.5 + random.NextDouble())).ToArray();
-		double scale = budgetMinutes / gaps.Sum();
+		double totalGaps = 0;
+
+		foreach (double gap in gaps) {
+			totalGaps += gap;
+		}
+
+		double scale = budgetMinutes / totalGaps;
 
 		List<PlannedAchievement> result = new(ordered.Count);
 		long offset = startOffset;

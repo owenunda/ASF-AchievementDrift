@@ -42,7 +42,7 @@ public sealed class DriftController : ArchiController {
 	}
 
 	/// <summary>Guarda la configuración de AchievementDrift de un bot (se aplica al instante).</summary>
-	[HttpPut("{botName:required}/Config")]
+	[HttpPost("{botName:required}/Config")]
 	[ProducesResponseType<GenericResponse>((int) HttpStatusCode.OK)]
 	public async Task<ActionResult<GenericResponse>> ConfigPut(string botName, [FromBody] DriftConfig config) {
 		ArgumentNullException.ThrowIfNull(config);
@@ -106,7 +106,10 @@ public sealed class DriftController : ArchiController {
 	// El panel envía su idioma en Accept-Language: los mensajes y nombres de esta petición lo siguen.
 	// CurrentUICulture vive en el contexto asíncrono de la petición, así que no afecta a ASF ni a otras peticiones
 	private void ApplyRequestLanguage() {
-		string preferred = Request.Headers.AcceptLanguage.ToString().Split(',')[0].Split(';')[0].Trim();
+		// Request y Headers.AcceptLanguage no existen en builds recortadas de ASF; HttpContext y el indexador sí
+#pragma warning disable ASP0015
+		string preferred = HttpContext.Request.Headers["Accept-Language"].ToString().Split(',')[0].Split(';')[0].Trim();
+#pragma warning restore ASP0015
 
 		if (preferred.Length == 0) {
 			return;

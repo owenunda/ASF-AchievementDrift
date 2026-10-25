@@ -23,12 +23,12 @@ internal static class WebApis {
 
 		Dictionary<string, double> result = new(StringComparer.Ordinal);
 
-		if (!response.Content.TryGetProperty("achievementpercentages", out JsonElement container) || !container.TryGetProperty("achievements", out JsonElement achievements) || (achievements.ValueKind != JsonValueKind.Array)) {
+		if (!TryGetProperty(response.Content, "achievementpercentages", out JsonElement container) || !TryGetProperty(container, "achievements", out JsonElement achievements) || (achievements.ValueKind != JsonValueKind.Array)) {
 			return result;
 		}
 
 		foreach (JsonElement achievement in achievements.EnumerateArray()) {
-			if (!achievement.TryGetProperty("name", out JsonElement name) || (name.GetString() is not { Length: > 0 } apiName) || !achievement.TryGetProperty("percent", out JsonElement percent)) {
+			if (!TryGetProperty(achievement, "name", out JsonElement name) || (name.GetString() is not { Length: > 0 } apiName) || !TryGetProperty(achievement, "percent", out JsonElement percent)) {
 				continue;
 			}
 
@@ -54,25 +54,42 @@ internal static class WebApis {
 		Uri url = new($"https://store.steampowered.com/api/appdetails?appids={key}&l=english");
 		ObjectResponse<JsonElement>? response = await webBrowser.UrlGetToJsonObject<JsonElement>(url).ConfigureAwait(false);
 
-		if ((response == null) || (response.Content.ValueKind != JsonValueKind.Object) || !response.Content.TryGetProperty(key, out JsonElement entry)) {
+		if ((response == null) || (response.Content.ValueKind != JsonValueKind.Object) || !TryGetProperty(response.Content, key, out JsonElement entry)) {
 			return null;
 		}
 
-		if (!entry.TryGetProperty("success", out JsonElement success) || (success.ValueKind != JsonValueKind.True) || !entry.TryGetProperty("data", out JsonElement data)) {
+		if (!TryGetProperty(entry, "success", out JsonElement success) || (success.ValueKind != JsonValueKind.True) || !TryGetProperty(entry, "data", out JsonElement data)) {
 			return new StoreInfo(false, key, []);
 		}
 
-		string name = data.TryGetProperty("name", out JsonElement nameElement) && (nameElement.GetString() is { Length: > 0 } text) ? text : key;
+		string name = TryGetProperty(data, "name", out JsonElement nameElement) && (nameElement.GetString() is { Length: > 0 } text) ? text : key;
 		ImmutableHashSet<int>.Builder categories = ImmutableHashSet.CreateBuilder<int>();
 
-		if (data.TryGetProperty("categories", out JsonElement categoryArray) && (categoryArray.ValueKind == JsonValueKind.Array)) {
+		if (TryGetProperty(data, "categories", out JsonElement categoryArray) && (categoryArray.ValueKind == JsonValueKind.Array)) {
 			foreach (JsonElement category in categoryArray.EnumerateArray()) {
-				if (category.TryGetProperty("id", out JsonElement id) && id.TryGetInt32(out int value)) {
+				if (TryGetProperty(category, "id", out JsonElement id) && id.TryGetInt32(out int value)) {
 					categories.Add(value);
 				}
 			}
 		}
 
 		return new StoreInfo(true, name, categories.ToImmutable());
+	}
+
+	// JsonElement.TryGetProperty no existe en builds recortadas de ASF; EnumerateObject sí
+	private static bool TryGetProperty(JsonElement element, string name, out JsonElement value) {
+		if (element.ValueKind == JsonValueKind.Object) {
+			foreach (JsonProperty property in element.EnumerateObject()) {
+				if (property.Name == name) {
+					value = property.Value;
+
+					return true;
+				}
+			}
+		}
+
+		value = default;
+
+		return false;
 	}
 }

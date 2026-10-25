@@ -10,7 +10,7 @@ namespace AchievementDrift.Tests;
 public sealed class GameAchievementsBuilderTests {
 	private const uint AppId = 356190;
 	private static readonly DateTime Now = new(2026, 10, 14, 12, 0, 0, DateTimeKind.Utc);
-	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), TimeZoneInfo.Utc);
+	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), static utc => utc);
 
 	private static LiveAchievement Live(string apiName, bool unlocked = false, bool isProtected = false) => new(apiName, $"{apiName} nombre", $"{apiName} desc", $"{apiName}.jpg", $"{apiName}_gray.jpg", unlocked, isProtected);
 

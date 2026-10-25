@@ -87,14 +87,38 @@ public sealed class DriftConfigTests {
 	}
 
 	[TestMethod]
-	public void ResolveTimeZoneFallsBackToLocal() {
-		Assert.AreEqual(TimeZoneInfo.Local.Id, new DriftConfig().ResolveTimeZone().Id);
+	public void ToLocalFallsBackToSystemTimeZone() {
+		DateTime utc = new(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc);
+
+		Assert.AreEqual(TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local), TimeZones.ToLocal(null)(utc));
+		Assert.AreEqual(TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local), TimeZones.ToLocal("Mars/Phobos")(utc));
 	}
 
 	[TestMethod]
-	public void ResolveTimeZoneUsesIanaId() {
-		TimeZoneInfo timeZone = new DriftConfig { TimeZone = "America/Bogota" }.ResolveTimeZone();
+	public void ToLocalUsesIanaId() {
+		DateTime utc = new(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc);
 
-		Assert.AreEqual(TimeSpan.FromHours(-5), timeZone.BaseUtcOffset);
+		Assert.AreEqual(new DateTime(2026, 7, 1, 7, 0, 0), TimeZones.ToLocal("America/Bogota")(utc));
+	}
+
+	// Build recortada de ASF: sin TimeZoneInfo se usa la hora del sistema y TimeZone se rechaza con un mensaje claro
+	[TestMethod]
+	[DoNotParallelize]
+	public void WithoutTimeZoneDatabaseUsesSystemTimeAndRejectsTimeZone() {
+		DateTime utc = new(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc);
+		TimeZones.Available = false;
+
+		try {
+			Assert.AreEqual(utc.ToLocalTime(), TimeZones.ToLocal("America/Bogota")(utc));
+			Assert.AreEqual("local (server)", new DriftConfig().DescribeTimeZone(CultureInfo.InvariantCulture));
+			Assert.IsTrue(new DriftConfig().Validate().Count == 0);
+
+			IReadOnlyList<string> errors = new DriftConfig { TimeZone = "America/Bogota" }.Validate(CultureInfo.InvariantCulture);
+
+			Assert.AreEqual(1, errors.Count);
+			StringAssert.Contains(errors[0], "trimmed");
+		} finally {
+			TimeZones.Available = true;
+		}
 	}
 }

@@ -36,9 +36,9 @@ internal sealed class GamePlan {
 	public bool IsCompleted => Entries.TrueForAll(static entry => entry.State != EEntryState.Pending);
 
 	[JsonIgnore]
-	public long PlanMinutes => Entries.Count == 0 ? 0 : Entries.Max(static entry => entry.OffsetMinutes);
+	public long PlanMinutes => Entries.Count == 0 ? 0 : Entries.MaxBy(static entry => entry.OffsetMinutes)!.OffsetMinutes;
 
-	public PlannedAchievement? GetNextPending() => Entries.Where(static entry => entry.State == EEntryState.Pending).MinBy(static entry => entry.OffsetMinutes);
+	public PlannedAchievement? GetNextPending() => Entries.Where(static entry => entry.State == EEntryState.Pending).MaxBy(static entry => -entry.OffsetMinutes); // MinBy no existe en builds recortadas de ASF
 }
 
 internal sealed class BotState {

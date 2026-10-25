@@ -10,7 +10,7 @@ public sealed class ActiveWindowTests {
 	private static ActiveWindow Utc(string hours) {
 		Assert.IsTrue(ActiveWindow.TryParseHours(hours, out TimeOnly start, out TimeOnly end));
 
-		return new ActiveWindow(start, end, TimeZoneInfo.Utc);
+		return new ActiveWindow(start, end, static utc => utc);
 	}
 
 	private static DateTime At(int year, int month, int day, int hour, int minute) => new(year, month, day, hour, minute, 0, DateTimeKind.Utc);

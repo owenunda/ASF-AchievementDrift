@@ -262,7 +262,7 @@ function readForm() {
 async function saveConfig(overrides = {}) {
 	const config = { ...readForm(), ...overrides };
 
-	await api(`${encodeURIComponent(currentBot())}/Config`, { method: "PUT", body: JSON.stringify(config) });
+	await api(`${encodeURIComponent(currentBot())}/Config`, { method: "POST", body: JSON.stringify(config) });
 	showMessage(t("configSaved"));
 	await loadConfig();
 }

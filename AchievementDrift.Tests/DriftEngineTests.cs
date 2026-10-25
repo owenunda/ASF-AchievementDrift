@@ -9,8 +9,8 @@ namespace AchievementDrift.Tests;
 [TestClass]
 public sealed class DriftEngineTests {
 	private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), TimeZoneInfo.Utc);
-	private static readonly ActiveWindow NeverNow = new(new TimeOnly(1, 0), new TimeOnly(2, 0), TimeZoneInfo.Utc);
+	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), static utc => utc);
+	private static readonly ActiveWindow NeverNow = new(new TimeOnly(1, 0), new TimeOnly(2, 0), static utc => utc);
 	private static readonly DriftConfig Config = new() { DryRun = false, MaxActiveGames = 2 };
 	private static readonly HashSet<uint> NoCooldown = [];
 
@@ -71,6 +71,49 @@ public sealed class DriftEngineTests {
 
 		Assert.AreEqual(2, state.ActiveGames.Count);
 		CollectionAssert.AreEquivalent(state.ActiveGames, result.GamesNeedingPlan.ToList());
+	}
+
+	[TestMethod]
+	public void PlayedStartedGameWithoutSlotLosesItsPlan() {
+		// Tres juegos empezados y dos huecos (p. ej. tras bajar MaxActiveGames): el 3 no se queda en pausa para siempre
+		BotState state = new() { Plans = { [1] = Plan(1, 0, 100), [2] = Plan(2, 0, 100), [3] = Plan(3, 0, 100) }, ActiveGames = { 1, 2 } };
+
+		TickResult result = Engine().Tick(state, Now, [1, 2, 3], NoCooldown, Config, AlwaysOn);
+
+		CollectionAssert.AreEqual(new uint[] { 1, 2 }, state.ActiveGames);
+		CollectionAssert.AreEquivalent(new uint[] { 1, 2 }, state.Plans.Keys.ToList());
+		Assert.IsTrue(result.StateChanged);
+	}
+
+	[TestMethod]
+	public void ReducingMaxActiveGamesDropsTheTrimmedPlans() {
+		BotState state = new() { Plans = { [1] = Plan(1, 0, 100), [2] = Plan(2, 0, 100) }, ActiveGames = { 1, 2 } };
+
+		Engine().Tick(state, Now, [1, 2], NoCooldown, Config with { MaxActiveGames = 1 }, AlwaysOn);
+
+		CollectionAssert.AreEqual(new uint[] { 1 }, state.ActiveGames);
+		CollectionAssert.AreEqual(new uint[] { 1 }, state.Plans.Keys.ToList());
+	}
+
+	[TestMethod]
+	public void PlansOfGamesNotPlayedOrCoolingDownAreKept() {
+		// Mientras ASF farmea cromos deja de jugar los juegos del plugin: sus planes no deben perderse
+		BotState state = new() { Plans = { [1] = Plan(1, 0, 100), [2] = Plan(2, 0, 100), [3] = Plan(3, 0, 100) }, ActiveGames = { 1 } };
+
+		Engine().Tick(state, Now, [1, 2, 7, 8], new HashSet<uint> { 2 }, Config, AlwaysOn);
+
+		Assert.IsTrue(state.Plans.ContainsKey(2));
+		Assert.IsTrue(state.Plans.ContainsKey(3));
+	}
+
+	[TestMethod]
+	public void FreeSlotGoesToStartedGameBeforeDropping() {
+		BotState state = new() { Plans = { [1] = Plan(1, 0, 100), [3] = Plan(3, 0, 100) }, ActiveGames = { 1 } };
+
+		Engine().Tick(state, Now, [1, 3, 4], NoCooldown, Config, AlwaysOn);
+
+		CollectionAssert.AreEquivalent(new uint[] { 1, 3 }, state.ActiveGames);
+		Assert.IsTrue(state.Plans.ContainsKey(3));
 	}
 
 	[TestMethod]

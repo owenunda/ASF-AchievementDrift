@@ -17,7 +17,7 @@ Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que
 - El orden y los tiempos de desbloqueo son **aleatorios**.
 - Solo avanza en juegos que el bot **está jugando en ese momento** (`GamesPlayedWhileIdle` o el farmeo de cromos). Si un juego deja de jugarse, su progreso se pausa.
 - Solo desbloquea dentro de un **horario humano** configurable, en tu zona horaria.
-- Como máximo `MaxActiveGames` juegos (2 por defecto) están en progreso a la vez; el resto espera turno.
+- Como máximo `MaxActiveGames` juegos (2 por defecto) están en progreso a la vez; el resto espera turno. Si un juego empezado se sigue jugando pero no consigue hueco (por ejemplo, tras bajar `MaxActiveGames`), se borra su plan; si más adelante consigue hueco, se crea uno nuevo desde su estado actual en Steam.
 - Excluye automáticamente juegos con VAC y juegos online/multijugador, además de tu lista negra (`Blacklist`). Una lista blanca (`Allowlist`) fuerza la inclusión de juegos concretos, salvo los que tienen VAC mientras `ExcludeVac` esté activado (VAC siempre gana).
 - También se excluyen los juegos sin datos de tienda o sin la categoría «Logros de Steam»; la `Allowlist` los fuerza igualmente (también a los online, pero no a los VAC si `ExcludeVac` está activado).
 - **Inglés y español**: el panel web tiene un selector EN/ES; los comandos y el log siguen el idioma de ASF (ver [Idioma](#idioma)).
@@ -62,7 +62,7 @@ Si Steam falla con un juego (no responde, da un error temporal o no se puede cre
 ## Requisitos
 
 - ASF **6.3.10.5** o compatible.
-- La build **`generic`** de ASF es **requerida** en lugar de las builds por sistema operativo (`linux-x64`, `win-x64`…): estas se publican recortadas (*trimmed*) y les faltan partes de .NET que el plugin usa, lo que provoca `MissingMethodException`/`TypeLoadException`. **La imagen oficial de Docker (`justarchi/archisteamfarm`) también está recortada**: con Docker, ejecuta ASF-generic sobre la imagen de .NET de Microsoft (ver [Docker](#docker)). Al cargar, el plugin comprueba esto y, si detecta una build recortada, lo avisa con un error en el log.
+- Funciona con la build **`generic`** de ASF y con las builds por sistema operativo (`win-x64`, `linux-x64`…). Estas se publican recortadas (*trimmed*) y no tienen base de datos de zonas horarias: ahí `ActiveHours` sigue la zona horaria del sistema y la opción `TimeZone` no está disponible (el plugin lo avisa en el log al cargar). Si necesitas `TimeZone`, usa la build `generic`. **La imagen oficial de Docker (`justarchi/archisteamfarm`) también está recortada** y los contenedores suelen ir en UTC, así que con Docker ejecuta ASF-generic sobre la imagen de .NET de Microsoft (ver [Docker](#docker)).
 - El bot debe estar farmeando horas, normalmente con `GamesPlayedWhileIdle` (o farmeando cromos).
 
 ## Instalación
@@ -74,7 +74,7 @@ Si Steam falla con un juego (no responde, da un error temporal o no se puede cre
 
 ### Docker
 
-La imagen oficial está recortada, así que ejecuta la build `generic` sobre `mcr.microsoft.com/dotnet/aspnet`. Descarga [`ASF-generic.zip`](https://github.com/JustArchiNET/ArchiSteamFarm/releases/latest), extráelo en una carpeta (`./asf` abajo, con dueño UID 1000) y usa un compose como este:
+La imagen oficial está recortada (sin `TimeZone`, ver [Requisitos](#requisitos)), así que ejecuta la build `generic` sobre `mcr.microsoft.com/dotnet/aspnet`. Descarga [`ASF-generic.zip`](https://github.com/JustArchiNET/ArchiSteamFarm/releases/latest), extráelo en una carpeta (`./asf` abajo, con dueño UID 1000) y usa un compose como este:
 
 ```yaml
 services:
@@ -138,7 +138,7 @@ Cada bot tiene su archivo `config/AchievementDrift/<bot>.config.json`. Se edita 
 | `MinDays` | `30` | Días mínimos para completar un juego. |
 | `MaxDays` | `45` | Días máximos (techo del sorteo). Debe ser ≥ `MinDays`. |
 | `ActiveHours` | `"10:00-01:00"` | Franja horaria `HH:mm-HH:mm`; puede cruzar la medianoche. |
-| `TimeZone` | zona del servidor | Identificador IANA (por ejemplo `America/Bogota`). En Docker el contenedor suele estar en UTC: configúralo (el panel web te ofrece la zona de tu navegador). |
+| `TimeZone` | zona del servidor | Identificador IANA (por ejemplo `America/Bogota`). En Docker el contenedor suele estar en UTC: configúralo (el panel web te ofrece la zona de tu navegador). Solo disponible en la build `generic` de ASF. |
 | `MaxActiveGames` | `2` | Juegos en progreso a la vez (1 a 10). |
 | `ExcludeVac` | `true` | Excluye juegos con VAC. |
 | `ExcludeOnline` | `true` | Excluye juegos con categorías online/multijugador. |
@@ -168,7 +168,7 @@ Protegida por el `IPCPassword` de ASF y visible en Swagger. Las respuestas sigue
 | `GET /Api/Drift/{bot}` | Estado: juegos, logros obtenidos/total, % del plan, próximo logro. |
 | `GET /Api/Drift/{bot}/Games/{appid}` | Logros de un juego: estado en vivo en Steam (nombre, descripción, icono, conseguido), % global y estado en el plan (siguiente, programado con fecha estimada, desbloqueado por Drift, protegido, saltado). Se cachea 1 minuto. |
 | `GET /Api/Drift/{bot}/Config` | Configuración del bot. |
-| `PUT /Api/Drift/{bot}/Config` | Guarda la configuración (validada). |
+| `POST /Api/Drift/{bot}/Config` | Guarda la configuración (validada). |
 
 ```bash
 curl -H "Authentication: <IPCPassword>" https://<tu-asf>/Api/Drift/<bot>
@@ -200,7 +200,7 @@ Para **reiniciar el progreso** de un bot: detén ASF y borra su `<bot>.state.jso
 
 **¿Hay un botón en el panel de ASF para abrirlo?** No: ASF-ui es la interfaz oficial de ASF y los plugins no pueden añadirle botones. Guarda `https://<tu-asf>/drift/` en marcadores; desde la página del plugin, **← ASF** te devuelve.
 
-**El plugin no carga, veo `MissingMethodException`/`TypeLoadException` o el aviso «Tu build de ASF parece recortada».** Las builds de ASF por sistema operativo y la imagen oficial de Docker están recortadas. Usa la build `generic` (con Docker, ver [Docker](#docker)).
+**Veo el error «Tu build de ASF parece recortada» y el plugin queda desactivado.** A tu build de ASF le falta algo que el plugin necesita: actualiza el plugin o usa la build `generic` (con Docker, ver [Docker](#docker)). El aviso sobre la base de datos de zonas horarias es distinto: el plugin funciona, solo no está disponible `TimeZone`.
 
 ## Compilar desde el código
 

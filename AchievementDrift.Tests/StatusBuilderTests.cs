@@ -9,7 +9,7 @@ namespace AchievementDrift.Tests;
 [TestClass]
 public sealed class StatusBuilderTests {
 	private static readonly DateTime Now = new(2026, 1, 11, 12, 0, 0, DateTimeKind.Utc);
-	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), TimeZoneInfo.Utc);
+	private static readonly ActiveWindow AlwaysOn = new(new TimeOnly(0, 0), new TimeOnly(0, 0), static utc => utc);
 
 	private static GamePlan Plan(uint appId, long activeMinutes, params (long Offset, EEntryState State)[] entries) => new() {
 		AppId = appId,

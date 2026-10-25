@@ -11,16 +11,17 @@ internal sealed class ActiveWindow {
 
 	internal TimeOnly Start { get; }
 	internal TimeOnly End { get; }
-	internal TimeZoneInfo TimeZone { get; }
+	private readonly Func<DateTime, DateTime> ToLocal;
 
 	internal int MinutesPerDay => Start == End ? MinutesInDay : (int) (End - Start).TotalMinutes;
 
-	internal ActiveWindow(TimeOnly start, TimeOnly end, TimeZoneInfo timeZone) {
-		ArgumentNullException.ThrowIfNull(timeZone);
+	// toLocal: de UTC a la hora local en la que se interpreta la franja (ver TimeZones)
+	internal ActiveWindow(TimeOnly start, TimeOnly end, Func<DateTime, DateTime> toLocal) {
+		ArgumentNullException.ThrowIfNull(toLocal);
 
 		Start = start;
 		End = end;
-		TimeZone = timeZone;
+		ToLocal = toLocal;
 	}
 
 	internal static ActiveWindow FromConfig(DriftConfig config) {
@@ -30,7 +31,7 @@ internal sealed class ActiveWindow {
 			throw new ArgumentException(config.ActiveHours, nameof(config));
 		}
 
-		return new ActiveWindow(start, end, config.ResolveTimeZone());
+		return new ActiveWindow(start, end, TimeZones.ToLocal(config.TimeZone));
 	}
 
 	internal static bool TryParseHours(string? text, out TimeOnly start, out TimeOnly end) {
@@ -52,7 +53,7 @@ internal sealed class ActiveWindow {
 			return true;
 		}
 
-		DateTime local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcNow, DateTimeKind.Utc), TimeZone);
+		DateTime local = ToLocal(utcNow);
 
 		return TimeOnly.FromDateTime(local).IsBetween(Start, End);
 	}

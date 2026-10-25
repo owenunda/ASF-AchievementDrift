@@ -21,9 +21,7 @@ public sealed record DriftConfig {
 	public ImmutableHashSet<uint> Blacklist { get; init; } = [];
 	public ImmutableHashSet<uint> Allowlist { get; init; } = [];
 
-	public string DescribeTimeZone(CultureInfo? culture = null) => TimeZone ?? Texts.FormatFor(culture, ETextKey.TimeZoneServer, TimeZoneInfo.Local.Id);
-
-	public TimeZoneInfo ResolveTimeZone() => TimeZoneResolver.TryFind(TimeZone, out TimeZoneInfo? timeZone) ? timeZone : TimeZoneInfo.Local;
+	public string DescribeTimeZone(CultureInfo? culture = null) => TimeZone ?? Texts.FormatFor(culture, ETextKey.TimeZoneServer, TimeZones.LocalId);
 
 	public IReadOnlyList<string> Validate(CultureInfo? culture = null) {
 		List<string> errors = [];
@@ -40,8 +38,8 @@ public sealed record DriftConfig {
 			errors.Add(Texts.FormatFor(culture, ETextKey.ValActiveHours, nameof(ActiveHours)));
 		}
 
-		if ((TimeZone != null) && !TimeZoneResolver.TryFind(TimeZone, out _)) {
-			errors.Add(Texts.FormatFor(culture, ETextKey.ValTimeZone, nameof(TimeZone), TimeZone));
+		if ((TimeZone != null) && !TimeZones.IsValid(TimeZone)) {
+			errors.Add(TimeZones.Available ? Texts.FormatFor(culture, ETextKey.ValTimeZone, nameof(TimeZone), TimeZone) : Texts.FormatFor(culture, ETextKey.ValTimeZoneUnavailable, nameof(TimeZone)));
 		}
 
 		if (MaxActiveGames is < 1 or > MaxAllowedActiveGames) {

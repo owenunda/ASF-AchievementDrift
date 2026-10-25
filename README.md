@@ -17,7 +17,7 @@ Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that
 - The unlock order and timing are **random**.
 - It only progresses on games the bot **is playing right now** (`GamesPlayedWhileIdle` or card farming). If a game stops being played, its progress pauses.
 - It only unlocks within configurable **human-like active hours**, in your time zone.
-- At most `MaxActiveGames` games (2 by default) are in progress at once; the rest wait their turn.
+- At most `MaxActiveGames` games (2 by default) are in progress at once; the rest wait their turn. A started game that is still being played but doesn't get a slot (for example after lowering `MaxActiveGames`) has its plan deleted; if it gets a slot later, a new plan is made from its current Steam state.
 - It automatically excludes VAC games and online/multiplayer games, plus your `Blacklist`. An `Allowlist` forces specific games in, except VAC games while `ExcludeVac` is on (VAC always wins).
 - Games without store data or without the "Steam Achievements" category are excluded too; the `Allowlist` forces them in as well (and online games, but not VAC games while `ExcludeVac` is on).
 - **English and Spanish**: the web panel has an EN/ES switch; commands and log messages follow ASF's language (see [Language](#language)).
@@ -62,7 +62,7 @@ If Steam fails for a game (no response, a temporary error, or its plan cannot be
 ## Requirements
 
 - ASF **6.3.10.5** or compatible.
-- The ASF **`generic`** build is **required** instead of the OS-specific builds (`linux-x64`, `win-x64`…): those are published trimmed and miss parts of .NET the plugin uses, which causes `MissingMethodException`/`TypeLoadException`. **The official Docker image (`justarchi/archisteamfarm`) is trimmed too**: with Docker, run ASF-generic on Microsoft's .NET image (see [Docker](#docker)). On load, the plugin checks this and logs an error if it detects a trimmed build.
+- Works with the ASF **`generic`** build and with the OS-specific builds (`win-x64`, `linux-x64`…). The OS-specific builds are published trimmed and have no time zone database: there `ActiveHours` follow the system time zone and the `TimeZone` setting is not available (the plugin logs a warning on load). If you need `TimeZone`, use the `generic` build. **The official Docker image (`justarchi/archisteamfarm`) is trimmed too**, and containers usually run in UTC, so with Docker run ASF-generic on Microsoft's .NET image (see [Docker](#docker)).
 - The bot must be idling hours, usually with `GamesPlayedWhileIdle` (or farming cards).
 
 ## Installation
@@ -74,7 +74,7 @@ If Steam fails for a game (no response, a temporary error, or its plan cannot be
 
 ### Docker
 
-The official image is trimmed, so run the `generic` build on `mcr.microsoft.com/dotnet/aspnet` instead. Download [`ASF-generic.zip`](https://github.com/JustArchiNET/ArchiSteamFarm/releases/latest), extract it into a folder (`./asf` below, owned by UID 1000) and use a compose like this one:
+The official image is trimmed (no `TimeZone`, see [Requirements](#requirements)), so run the `generic` build on `mcr.microsoft.com/dotnet/aspnet` instead. Download [`ASF-generic.zip`](https://github.com/JustArchiNET/ArchiSteamFarm/releases/latest), extract it into a folder (`./asf` below, owned by UID 1000) and use a compose like this one:
 
 ```yaml
 services:
@@ -138,7 +138,7 @@ Each bot has its own `config/AchievementDrift/<bot>.config.json`. It is edited f
 | `MinDays` | `30` | Minimum days to complete a game. |
 | `MaxDays` | `45` | Maximum days (upper bound of the draw). Must be ≥ `MinDays`. |
 | `ActiveHours` | `"10:00-01:00"` | Window `HH:mm-HH:mm`; it can cross midnight. |
-| `TimeZone` | server zone | IANA id (for example `America/Bogota`). In Docker the container is usually in UTC: set it (the web panel offers your browser's zone). |
+| `TimeZone` | server zone | IANA id (for example `America/Bogota`). In Docker the container is usually in UTC: set it (the web panel offers your browser's zone). Only available on the ASF `generic` build. |
 | `MaxActiveGames` | `2` | Games in progress at once (1 to 10). |
 | `ExcludeVac` | `true` | Excludes VAC games. |
 | `ExcludeOnline` | `true` | Excludes games with online/multiplayer categories. |
@@ -168,7 +168,7 @@ Protected by ASF's `IPCPassword` and visible in Swagger. Responses use ASF's `Ge
 | `GET /Api/Drift/{bot}` | Status: games, unlocked/total achievements, % of the plan, next achievement. |
 | `GET /Api/Drift/{bot}/Games/{appid}` | A game's achievements: live Steam state (name, description, icon, unlocked), global % and state in the plan (next, scheduled with estimated date, unlocked by Drift, protected, skipped). Cached for 1 minute. |
 | `GET /Api/Drift/{bot}/Config` | The bot's configuration. |
-| `PUT /Api/Drift/{bot}/Config` | Saves the configuration (validated). |
+| `POST /Api/Drift/{bot}/Config` | Saves the configuration (validated). |
 
 ```bash
 curl -H "Authentication: <IPCPassword>" https://<your-asf>/Api/Drift/<bot>
@@ -200,7 +200,7 @@ To **reset a bot's progress**: stop ASF and delete its `<bot>.state.json`.
 
 **Is there a button in the ASF panel to open it?** No: ASF-ui is ASF's official interface and plugins cannot add buttons to it. Bookmark `https://<your-asf>/drift/`; from the plugin page, **← ASF** takes you back.
 
-**The plugin does not load, I see `MissingMethodException`/`TypeLoadException` or the "Your ASF build looks trimmed" warning.** The OS-specific ASF builds and the official Docker image are trimmed. Use the `generic` build (with Docker, see [Docker](#docker)).
+**I see the "Your ASF build looks trimmed" error and the plugin is disabled.** Your ASF build is missing something the plugin needs: update the plugin, or use the `generic` build (with Docker, see [Docker](#docker)). The warning about the time zone database is different: the plugin works, only `TimeZone` is unavailable.
 
 ## Building from source
 

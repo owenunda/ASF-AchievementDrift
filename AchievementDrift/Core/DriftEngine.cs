@@ -54,6 +54,7 @@ internal sealed class DriftEngine(Random random) {
 		}
 
 		changed |= FillSlots(state, playing, config.MaxActiveGames);
+		changed |= DropLeftoverPlans(state, playing);
 
 		List<uint> needPlan = [];
 
@@ -93,7 +94,21 @@ internal sealed class DriftEngine(Random random) {
 		.Select(appId => state.Plans[appId])
 		.Where(static plan => !IsInMinGap(plan))
 		.SelectMany(static plan => plan.Entries.Where(entry => (entry.State == EEntryState.Pending) && (entry.OffsetMinutes <= plan.ActiveMinutes)).Select(entry => new UnlockDecision(plan.AppId, entry)))
-		.MinBy(static decision => decision.Entry.OffsetMinutes);
+		.MaxBy(static decision => -decision.Entry.OffsetMinutes); // MinBy no existe en builds recortadas de ASF
+
+	// Un hueco solo se libera cuando un juego completa su plan: un juego empezado que se sigue jugando pero se quedó sin hueco
+	// (p. ej. tras bajar MaxActiveGames) estaría en pausa meses. Se borra su plan; si más adelante consigue hueco, se crea uno
+	// nuevo desde el estado real de Steam. Solo cuenta lo que se está jugando ahora: los planes de juegos que ASF dejó de
+	// jugar un rato (farmeo de cromos, juegos en espera por errores) se conservan.
+	private static bool DropLeftoverPlans(BotState state, HashSet<uint> playing) {
+		List<uint> leftover = playing.Where(appId => !state.ActiveGames.Contains(appId) && state.Plans.TryGetValue(appId, out GamePlan? plan) && !plan.IsCompleted).ToList();
+
+		foreach (uint appId in leftover) {
+			state.Plans.Remove(appId);
+		}
+
+		return leftover.Count > 0;
+	}
 
 	private bool FillSlots(BotState state, HashSet<uint> playing, int maxActiveGames) {
 		int free = maxActiveGames - state.ActiveGames.Count;

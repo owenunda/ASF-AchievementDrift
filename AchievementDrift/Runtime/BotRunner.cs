@@ -267,7 +267,7 @@ internal sealed class BotRunner : IAsyncDisposable {
 
 	private async Task TickAsync() {
 		// Si el tick anterior (o una consulta de estado) sigue en curso, esperamos un poco antes de rendirnos
-		if (!await StateLock.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false)) {
+		if (!await StateLock.WaitAsync(30_000).ConfigureAwait(false)) {
 			return;
 		}
 
