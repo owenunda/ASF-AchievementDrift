@@ -4,6 +4,8 @@
 
 Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that unlocks achievements gradually and realistically while you idle hours.
 
+<img src="docs/images/demo.gif" alt="The web panel: games in progress and a game's achievements with their estimated unlock dates" width="480">
+
 ## ⚠️ Important
 
 - **Modifying achievements is against Steam's terms.** Use it at your own risk.

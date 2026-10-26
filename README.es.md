@@ -4,6 +4,8 @@
 
 Plugin para [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) que desbloquea logros de forma gradual y realista mientras farmeas horas.
 
+<img src="docs/images/demo.gif" alt="El panel web: juegos en progreso y los logros de un juego con su fecha estimada de desbloqueo" width="480">
+
 ## ⚠️ Aviso importante
 
 - **Modificar logros va contra los términos de Steam.** Úsalo bajo tu propia responsabilidad.
