@@ -10,7 +10,7 @@
 3. Restart ASF. · *Reinicia ASF.*
 4. Open `https://<your-asf>/drift/` (with the trailing slash), enter your `IPCPassword` and review the configuration. `DryRun` is on: it only simulates until you turn it off. · *Abre `https://<tu-asf>/drift/` (con la barra final), introduce tu `IPCPassword` y revisa la configuración. `DryRun` viene activo: solo simula hasta que lo desactives.*
 
-Requires the ASF **generic** build (the OS-specific builds and the official Docker image are trimmed). · *Requiere la build **generic** de ASF (las builds por SO y la imagen oficial de Docker están recortadas).*
+Works with the ASF **generic** build and the OS-specific builds (`win-x64`, `linux-x64`…). On the OS-specific builds and the official Docker image (trimmed) `ActiveHours` follow the system time zone and the `TimeZone` setting is not available. · *Funciona con la build **generic** de ASF y con las builds por SO (`win-x64`, `linux-x64`…). En las builds por SO y la imagen oficial de Docker (recortadas) `ActiveHours` sigue la zona horaria del sistema y la opción `TimeZone` no está disponible.*
 
 More info: [README (English)](https://github.com/owenunda/ASF-AchievementDrift#readme) · [README (español)](https://github.com/owenunda/ASF-AchievementDrift/blob/main/README.es.md)
 
