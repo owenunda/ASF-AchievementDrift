@@ -8,7 +8,7 @@ Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that
 
 - **Modifying achievements is against Steam's terms.** Use it at your own risk.
 - Games with anti-cheat (VAC) or server-validated stats are risky. By default the plugin excludes VAC games and online/multiplayer games, but detection is not perfect (some online games do not declare their categories): use `Blacklist` when in doubt.
-- `DryRun` is **on by default**: the plugin only simulates and logs what it would do. You have to turn it off yourself.
+- The plugin starts in **Simulation** mode (`DryRun`): it only logs what it would do and never touches Steam. Switching to **Real** is up to you.
 
 ## What it does
 
@@ -20,15 +20,16 @@ Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that
 - At most `MaxActiveGames` games (2 by default) are in progress at once; the rest wait their turn. A started game that is still being played but doesn't get a slot (for example after lowering `MaxActiveGames`) has its plan deleted; if it gets a slot later, a new plan is made from its current Steam state.
 - It automatically excludes VAC games and online/multiplayer games, plus your `Blacklist`. An `Allowlist` forces specific games in, except VAC games while `ExcludeVac` is on (VAC always wins).
 - Games without store data or without the "Steam Achievements" category are excluded too; the `Allowlist` forces them in as well (and online games, but not VAC games while `ExcludeVac` is on).
+- **Several accounts**: each bot has its own configuration and plans, and the commands accept ASF's bot targets (`!drift status ASF`).
 - **English and Spanish**: the web panel has an EN/ES switch; commands and log messages follow ASF's language (see [Language](#language)).
 
 ## Screenshots
 
-**Web panel (`/drift/`)**: each game in progress with its cover, plan progress and next achievement.
+**Web panel (`/drift/`)**: the label at the top tells you at a glance whether it is unlocking for real or only simulating. Below, each game in progress with its cover, plan progress and next achievement. Finished games are no longer listed.
 
 ![Web panel with the games in progress](docs/images/panel-status.webp)
 
-<img src="docs/images/game-card.png" alt="A game card: state, achievements, plan progress and next achievement" width="320">
+<img src="docs/images/game-card.png" alt="A game card: state, achievements, plan progress and next achievement" width="300">
 
 **View achievements**: the game's full list, like Steam, with the global % of players and the state of each achievement in the plan.
 
@@ -36,11 +37,11 @@ Plugin for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm) that
 
 ![Locked achievements with their estimated unlock dates](docs/images/achievements-locked.png)
 
-**Configuration**: edited from the panel, applied immediately.
+**Configuration**: grouped into *How it runs*, *Pace* and *Which games*, with a short explanation under each option. The mode is a clear choice between Simulation and Real, and the active hours are picked with two time selectors. Changes apply immediately.
 
-![Configuration tab](docs/images/panel-config.png)
+<img src="docs/images/panel-config.png" alt="Configuration tab: mode, pace and which games" width="480">
 
-**`!drift status`** from the ASF Commands page.
+**`!drift status ASF`** from the ASF Commands page.
 
 ![Output of the !drift status command](docs/images/command-status.png)
 
@@ -61,7 +62,7 @@ If Steam fails for a game (no response, a temporary error, or its plan cannot be
 
 ## Requirements
 
-- ASF **6.3.10.5** or compatible.
+- ASF **6.3.10.5** or later.
 - Works with the ASF **`generic`** build and with the OS-specific builds (`win-x64`, `linux-x64`…). The OS-specific builds are published trimmed and have no time zone database: there `ActiveHours` follow the system time zone and the `TimeZone` setting is not available (the plugin logs a warning on load). If you need `TimeZone`, use the `generic` build. **The official Docker image (`justarchi/archisteamfarm`) is trimmed too**, and containers usually run in UTC, so with Docker run ASF-generic on Microsoft's .NET image (see [Docker](#docker)).
 - The bot must be idling hours, usually with `GamesPlayedWhileIdle` (or farming cards).
 
@@ -117,9 +118,9 @@ With `UpdateChannel` = `Stable` (the default) ASF only takes releases marked as 
 
 1. Open `https://<your-asf>/drift/` (**with the trailing slash**).
 2. Enter ASF's `IPCPassword` (it is stored in your browser).
-3. Accept the time zone the page detects, or set yours.
-4. Leave `DryRun` on and check the log: you will see `[AchievementDrift][DryRun] Would unlock "..." ...` lines.
-5. When you are happy, turn `DryRun` off. While it is on, the status shows simulated achievements as done (only so you can see the progress; nothing is unlocked on Steam). When you turn it off, every plan with simulated achievements is discarded and regenerated in real mode from the real Steam state.
+3. In **Configuration**, pick your active hours and accept the time zone the page detects (or set yours).
+4. Keep the **Simulation** mode for a while and check the log: you will see `[AchievementDrift][DryRun] Would unlock "..." ...` lines. The status shows the simulated achievements as done, only so you can see the progress: nothing is unlocked on Steam.
+5. When you are happy, choose **Real** and save. Every plan with simulated achievements is discarded and created again from your real Steam progress.
 
 ## Language
 
@@ -131,25 +132,27 @@ With `UpdateChannel` = `Stable` (the default) ASF only takes releases marked as 
 
 Each bot has its own `config/AchievementDrift/<bot>.config.json`. It is edited from the web page (`/drift/`) or through the IPC API, and changes apply **immediately**, without restarting. If you edit the file by hand while ASF is running, the change does not apply until ASF restarts and may be overwritten by the next save from the web, the API or the commands. The configuration only lives in this file (not in ASF's bot JSON).
 
-| Key | Default | Description |
-|---|---|---|
-| `Enabled` | `true` | Enables the plugin for this bot. |
-| `DryRun` | `true` | Simulates without unlocking anything. Must be turned off by hand. |
-| `MinDays` | `30` | Minimum days to complete a game. |
-| `MaxDays` | `45` | Maximum days (upper bound of the draw). Must be ≥ `MinDays`. |
-| `ActiveHours` | `"10:00-01:00"` | Window `HH:mm-HH:mm`; it can cross midnight. |
-| `TimeZone` | server zone | IANA id (for example `America/Bogota`). In Docker the container is usually in UTC: set it (the web panel offers your browser's zone). Only available on the ASF `generic` build. |
-| `MaxActiveGames` | `2` | Games in progress at once (1 to 10). |
-| `ExcludeVac` | `true` | Excludes VAC games. |
-| `ExcludeOnline` | `true` | Excludes games with online/multiplayer categories. |
-| `Blacklist` | `[]` | Appids that are always excluded. |
-| `Allowlist` | `[]` | Appids included even if they are online, have no store data or show no achievements (unless they are in `Blacklist`, or have VAC with `ExcludeVac` on). |
+| Key | In the panel | Default | Description |
+|---|---|---|---|
+| `Enabled` | Enabled | `true` | Enables the plugin for this bot. |
+| `DryRun` | Mode: Simulation / Real | `true` (Simulation) | Simulation logs what it would do without unlocking anything. Switching to Real is up to you. |
+| `MinDays` | Time to finish each game: between… | `30` | Minimum days to complete a game. |
+| `MaxDays` | …and… days | `45` | Maximum days (upper bound of the draw). Must be ≥ `MinDays`. |
+| `MaxActiveGames` | Games in progress at once | `2` | 1 to 10. If you lower it, the plans of the started games that no longer get a slot are deleted. |
+| `ActiveHours` | Active hours: from… to… | `"10:00-01:00"` | Window `HH:mm-HH:mm`; it can cross midnight, and the same start and end means all day. |
+| `TimeZone` | Time zone | system zone | IANA id (for example `America/Bogota`). In Docker the container is usually in UTC: set it (the web panel offers your browser's zone). Only available on the ASF `generic` build. |
+| `ExcludeVac` | Skip games with VAC anti-cheat | `true` | Excludes VAC games. |
+| `ExcludeOnline` | Skip online and multiplayer games | `true` | Excludes games with online/multiplayer categories. |
+| `Blacklist` | Excluded games | `[]` | Appids that are always excluded. |
+| `Allowlist` | Always included games | `[]` | Appids included even if they are online, have no store data or show no achievements (unless they are in `Blacklist`, or have VAC with `ExcludeVac` on). |
+
+The **appid** is the number in a game's Steam store address: `store.steampowered.com/app/`**`730`**`/...`.
 
 Invalid values are rejected (the API answers 400 with a message); a corrupt file is ignored with a warning in the log and the defaults are used. Changing `MinDays`/`MaxDays` does not regenerate existing plans; it only affects new ones.
 
 ## Commands
 
-They require `Master` permission and act on the bot that receives the command.
+They require `Master` permission on each bot they act on.
 
 | Command | What it does |
 |---|---|
@@ -158,7 +161,7 @@ They require `Master` permission and act on the bot that receives the command.
 | `!drift plan [bots] <appid>` | Shows a game's plan without unlocking anything. |
 | `!drift replan [bots] <appid>` | Deletes a game's plan; it is regenerated when the game is active again. |
 
-Without `[bots]` a command applies to the bot that receives it. Like ASF's own commands, `[bots]` accepts bot names separated by commas or `ASF` for all of them, for example `!drift status ASF`: each bot answers on its own lines.
+Without `[bots]` a command applies to the bot that receives it. Like ASF's own commands, `[bots]` accepts bot names separated by commas or `ASF` for all of them, for example `!drift status ASF`: each bot answers on its own lines, and the panel path is shown once at the end.
 
 ## IPC API
 
@@ -200,7 +203,9 @@ To **reset a bot's progress**: stop ASF and delete its `<bot>.state.json`.
 
 **The `/drift` page takes me to the ASF panel or returns 404.** The URL must end with a slash: `https://<your-asf>/drift/`.
 
-**Is there a button in the ASF panel to open it?** No: ASF-ui is ASF's official interface and plugins cannot add buttons to it. Bookmark `https://<your-asf>/drift/`; from the plugin page, **← ASF** takes you back.
+**Is there a button in the ASF panel to open it?** It is on its way: ASF now reports the address of each plugin's web page ([ArchiSteamFarm#3631](https://github.com/JustArchiNET/ArchiSteamFarm/issues/3631)) and ASF-ui shows an **Open web interface** link on its **Plugins** page ([ASF-ui#1771](https://github.com/JustArchiNET/ASF-ui/pull/1771)). Both arrive with an upcoming ASF release, with no change needed in the plugin. Until then, bookmark `https://<your-asf>/drift/`; from the plugin page, **← ASF** takes you back.
+
+**What does "Simulation" or "Real" at the top of the panel mean?** It is the mode of the selected bot. **Real** unlocks achievements on Steam; **Simulation** only logs what it would do. You change it in **Configuration**.
 
 **I see the "Your ASF build looks trimmed" error and the plugin is disabled.** Your ASF build is missing something the plugin needs: update the plugin, or use the `generic` build (with Docker, see [Docker](#docker)). The warning about the time zone database is different: the plugin works, only `TimeZone` is unavailable.
 

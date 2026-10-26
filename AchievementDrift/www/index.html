@@ -33,19 +33,84 @@
 		</section>
 
 		<section id="tab-config" hidden>
-			<div id="tz-suggestion" hidden></div>
 			<form id="config-form">
-				<label><input type="checkbox" name="Enabled"> <span data-i18n="cfgEnabled">Enabled</span></label>
-				<label><input type="checkbox" name="DryRun"> <span data-i18n="cfgDryRun">Simulation mode (DryRun): logs only, does not unlock</span></label>
-				<label><span data-i18n="cfgMinDays">Minimum days per game</span> <input type="number" name="MinDays" min="1" max="365" required></label>
-				<label><span data-i18n="cfgMaxDays">Maximum days per game</span> <input type="number" name="MaxDays" min="1" max="365" required></label>
-				<label><span data-i18n="cfgActiveHours">Active hours (HH:mm-HH:mm)</span> <input type="text" name="ActiveHours" pattern="\d{1,2}:\d{2}-\d{1,2}:\d{2}" required></label>
-				<label><span data-i18n="cfgTimeZone">Time zone (IANA, empty = server)</span> <input type="text" name="TimeZone" placeholder="America/Bogota"></label>
-				<label><span data-i18n="cfgMaxActiveGames">Games in progress at once</span> <input type="number" name="MaxActiveGames" min="1" max="10" required></label>
-				<label><input type="checkbox" name="ExcludeVac"> <span data-i18n="cfgExcludeVac">Exclude VAC games</span></label>
-				<label><input type="checkbox" name="ExcludeOnline"> <span data-i18n="cfgExcludeOnline">Exclude online/multiplayer games</span></label>
-				<label><span data-i18n="cfgBlacklist">Blacklist (comma-separated appids)</span> <input type="text" name="Blacklist"></label>
-				<label><span data-i18n="cfgAllowlist">Allowlist (comma-separated appids)</span> <input type="text" name="Allowlist"></label>
+				<fieldset>
+					<legend data-i18n="cfgGroupRun">How it runs</legend>
+					<label class="check">
+						<input type="checkbox" name="Enabled">
+						<span><span data-i18n="cfgEnabled">Enabled</span><small class="hint" data-i18n="cfgEnabledHint">When off, this bot doesn't plan or unlock anything.</small></span>
+					</label>
+					<div class="modes" role="radiogroup" data-i18n-aria="cfgMode">
+						<label class="mode">
+							<input type="radio" name="DryRun" value="true" required>
+							<span><strong data-i18n="cfgModeSimulation">Simulation</strong><small class="hint" data-i18n="cfgModeSimulationHint">Doesn't touch Steam: it only logs what it would unlock and shows the simulated progress.</small></span>
+						</label>
+						<label class="mode mode-real">
+							<input type="radio" name="DryRun" value="false" required>
+							<span><strong data-i18n="cfgModeReal">Real</strong><small class="hint" data-i18n="cfgModeRealHint">Unlocks achievements on your Steam account. Simulated plans are discarded and created again from your real progress.</small></span>
+						</label>
+					</div>
+				</fieldset>
+
+				<fieldset>
+					<legend data-i18n="cfgGroupPace">Pace</legend>
+					<div class="field">
+						<span data-i18n="cfgDuration">Time to finish each game</span>
+						<span class="range">
+							<span data-i18n="cfgBetween">between</span>
+							<input type="number" name="MinDays" min="1" max="365" required data-i18n-aria="cfgMinDays">
+							<span data-i18n="cfgAnd">and</span>
+							<input type="number" name="MaxDays" min="1" max="365" required data-i18n-aria="cfgMaxDays">
+							<span data-i18n="cfgDays">days</span>
+						</span>
+						<small class="hint" data-i18n="cfgDurationHint">Each game gets a random duration in this range, so they don't all finish at once.</small>
+					</div>
+					<label class="field">
+						<span data-i18n="cfgMaxActiveGames">Games in progress at once</span>
+						<input type="number" name="MaxActiveGames" min="1" max="10" required>
+						<small class="hint" data-i18n="cfgMaxActiveGamesHint">The rest wait for a free slot. If you lower it, the plans of the games left over are deleted.</small>
+					</label>
+					<div class="field">
+						<span data-i18n="cfgActiveHours">Active hours</span>
+						<span class="range">
+							<span data-i18n="cfgFrom">from</span>
+							<input type="time" name="ActiveFrom" required data-i18n-aria="cfgActiveFrom">
+							<span data-i18n="cfgTo">to</span>
+							<input type="time" name="ActiveTo" required data-i18n-aria="cfgActiveTo">
+						</span>
+						<small class="hint" id="hours-summary"></small>
+						<small class="hint" data-i18n="cfgActiveHoursHint">Achievements only unlock inside these hours. Same start and end = all day.</small>
+					</div>
+					<label class="field">
+						<span data-i18n="cfgTimeZone">Time zone</span>
+						<input type="text" name="TimeZone">
+						<small class="hint" data-i18n="cfgTimeZoneHint">Leave it empty to use the time zone of the computer running ASF.</small>
+					</label>
+					<div id="tz-suggestion" hidden></div>
+				</fieldset>
+
+				<fieldset>
+					<legend data-i18n="cfgGroupGames">Which games</legend>
+					<label class="check">
+						<input type="checkbox" name="ExcludeVac">
+						<span><span data-i18n="cfgExcludeVac">Skip games with VAC anti-cheat</span><small class="hint" data-i18n="cfgExcludeVacHint">Recommended: VAC games carry the most risk.</small></span>
+					</label>
+					<label class="check">
+						<input type="checkbox" name="ExcludeOnline">
+						<span><span data-i18n="cfgExcludeOnline">Skip online and multiplayer games</span><small class="hint" data-i18n="cfgExcludeOnlineHint">Their stats are often checked by the game's servers.</small></span>
+					</label>
+					<label class="field">
+						<span data-i18n="cfgBlacklist">Excluded games</span>
+						<input type="text" name="Blacklist">
+						<small class="hint" data-i18n="cfgBlacklistHint">Never touched. AppIDs separated by commas: the number in the game's Steam store address.</small>
+					</label>
+					<label class="field">
+						<span data-i18n="cfgAllowlist">Always included games</span>
+						<input type="text" name="Allowlist">
+						<small class="hint" data-i18n="cfgAllowlistHint">Included even if they're online or lack store data. VAC games stay excluded while that option is on.</small>
+					</label>
+				</fieldset>
+
 				<button type="submit" data-i18n="cfgSave">Save</button>
 			</form>
 		</section>
@@ -124,7 +189,7 @@
 							<div><dt><span class="badge accent">Next</span></dt><dd>The next one due, with its estimated time.</dd></div>
 							<div><dt><span class="badge muted">Scheduled</span></dt><dd>Planned for later, with its estimated date.</dd></div>
 							<div><dt><span class="badge ok">Unlocked by Drift</span></dt><dd>Unlocked by the plugin, with the real date.</dd></div>
-							<div><dt><span class="badge info">Simulated</span></dt><dd>Only in DryRun: what it would have unlocked.</dd></div>
+							<div><dt><span class="badge info">Simulated</span></dt><dd>Only in Simulation mode: what it would have unlocked.</dd></div>
 							<div><dt><span class="badge warn">Protected</span></dt><dd>Validated by the game's server: never touched.</dd></div>
 							<div><dt><span class="badge warn">Skipped</span></dt><dd>Steam rejected it, or it failed 5 times in a row.</dd></div>
 						</dl>
@@ -136,14 +201,14 @@
 							<table>
 								<thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
 								<tbody>
-									<tr><td>Simulation mode (DryRun)</td><td><code>on</code></td><td>Only logs what it would unlock (<code>[AchievementDrift][DryRun]</code> lines). When you turn it off, simulated plans are rebuilt from your real Steam state.</td></tr>
-									<tr><td>Minimum / maximum days</td><td><code>30 / 45</code></td><td>How long a game takes to complete. Changes only affect new plans.</td></tr>
-									<tr><td>Active hours</td><td><code>10:00-01:00</code></td><td>When achievements may unlock. It can cross midnight. Widening it after a plan exists speeds that plan up.</td></tr>
-									<tr><td>Time zone</td><td><code>server</code></td><td>Your IANA zone, e.g. <code>America/Bogota</code>. Docker usually runs in UTC: set it.</td></tr>
-									<tr><td>Games in progress at once</td><td><code>2</code></td><td>The rest wait their turn. More games at once looks less natural.</td></tr>
-									<tr><td>Exclude VAC / online</td><td><code>on / on</code></td><td>Uses the Steam store categories. Some online games do not declare them: add those to the Blacklist.</td></tr>
-									<tr><td>Blacklist</td><td><code>—</code></td><td>Appids that are always excluded.</td></tr>
-									<tr><td>Allowlist</td><td><code>—</code></td><td>Forces a game in even if marked online or without store data, at your own risk. VAC still wins while VAC exclusion is on.</td></tr>
+									<tr><td>Mode: Simulation / Real</td><td><code>Simulation</code></td><td>Simulation only logs what it would unlock (<code>[AchievementDrift][DryRun]</code> lines). When you switch to Real, simulated plans are rebuilt from your real Steam state.</td></tr>
+									<tr><td>Time to finish each game</td><td><code>30–45 days</code></td><td>How long a game takes to complete. Changes only affect new plans.</td></tr>
+									<tr><td>Active hours</td><td><code>10:00–01:00</code></td><td>When achievements may unlock. It can cross midnight; the same start and end means all day. Widening it after a plan exists speeds that plan up.</td></tr>
+									<tr><td>Time zone</td><td><code>system</code></td><td>Your IANA zone, e.g. <code>America/Bogota</code>. Docker usually runs in UTC: set it. Not available on trimmed ASF builds.</td></tr>
+									<tr><td>Games in progress at once</td><td><code>2</code></td><td>The rest wait for a free slot. More games at once looks less natural. If you lower it, the plans of started games left without a slot are deleted.</td></tr>
+									<tr><td>Skip VAC / online games</td><td><code>on / on</code></td><td>Uses the Steam store categories. Some online games do not declare them: add those to the excluded games.</td></tr>
+									<tr><td>Excluded games</td><td><code>—</code></td><td>Appids that are always excluded.</td></tr>
+									<tr><td>Always included games</td><td><code>—</code></td><td>Forces a game in even if marked online or without store data, at your own risk. VAC still wins while VAC exclusion is on.</td></tr>
 								</tbody>
 							</table>
 						</div>
@@ -255,7 +320,7 @@
 							<div><dt><span class="badge accent">Siguiente</span></dt><dd>El próximo en salir, con su hora estimada.</dd></div>
 							<div><dt><span class="badge muted">Programado</span></dt><dd>Planificado para más adelante, con su fecha estimada.</dd></div>
 							<div><dt><span class="badge ok">Desbloqueado por Drift</span></dt><dd>Desbloqueado por el plugin, con la fecha real.</dd></div>
-							<div><dt><span class="badge info">Simulado</span></dt><dd>Solo en DryRun: lo que habría desbloqueado.</dd></div>
+							<div><dt><span class="badge info">Simulado</span></dt><dd>Solo en modo Simulación: lo que habría desbloqueado.</dd></div>
 							<div><dt><span class="badge warn">Protegido</span></dt><dd>Lo valida el servidor del juego: nunca se toca.</dd></div>
 							<div><dt><span class="badge warn">Saltado</span></dt><dd>Steam lo rechazó, o falló 5 veces seguidas.</dd></div>
 						</dl>
@@ -267,14 +332,14 @@
 							<table>
 								<thead><tr><th>Opción</th><th>Por defecto</th><th>Qué hace</th></tr></thead>
 								<tbody>
-									<tr><td>Modo simulación (DryRun)</td><td><code>activo</code></td><td>Solo registra lo que desbloquearía (líneas <code>[AchievementDrift][DryRun]</code>). Al desactivarlo, los planes simulados se rehacen desde tu estado real en Steam.</td></tr>
-									<tr><td>Días mínimos / máximos</td><td><code>30 / 45</code></td><td>Cuánto tarda un juego en completarse. Los cambios solo afectan a planes nuevos.</td></tr>
-									<tr><td>Horario activo</td><td><code>10:00-01:00</code></td><td>Cuándo pueden salir logros. Puede cruzar la medianoche. Ampliarlo con un plan ya creado lo acelera.</td></tr>
-									<tr><td>Zona horaria</td><td><code>servidor</code></td><td>Tu zona IANA, p. ej. <code>America/Bogota</code>. Docker suele ir en UTC: configúrala.</td></tr>
-									<tr><td>Juegos en progreso a la vez</td><td><code>2</code></td><td>El resto espera su turno. Más juegos a la vez se ve menos natural.</td></tr>
-									<tr><td>Excluir VAC / online</td><td><code>sí / sí</code></td><td>Usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a la Blacklist.</td></tr>
-									<tr><td>Blacklist</td><td><code>—</code></td><td>Appids que siempre se excluyen.</td></tr>
-									<tr><td>Allowlist</td><td><code>—</code></td><td>Fuerza un juego aunque esté marcado como online o sin datos de tienda, bajo tu responsabilidad. VAC sigue ganando mientras su exclusión esté activa.</td></tr>
+									<tr><td>Modo: Simulación / Real</td><td><code>Simulación</code></td><td>Simulación solo registra lo que desbloquearía (líneas <code>[AchievementDrift][DryRun]</code>). Al pasar a Real, los planes simulados se rehacen desde tu estado real en Steam.</td></tr>
+									<tr><td>Tiempo para completar cada juego</td><td><code>30–45 días</code></td><td>Cuánto tarda un juego en completarse. Los cambios solo afectan a planes nuevos.</td></tr>
+									<tr><td>Horario activo</td><td><code>10:00–01:00</code></td><td>Cuándo pueden salir logros. Puede cruzar la medianoche; la misma hora de inicio y de fin significa todo el día. Ampliarlo con un plan ya creado lo acelera.</td></tr>
+									<tr><td>Zona horaria</td><td><code>sistema</code></td><td>Tu zona IANA, p. ej. <code>America/Bogota</code>. Docker suele ir en UTC: configúrala. No está disponible en las builds recortadas de ASF.</td></tr>
+									<tr><td>Juegos en progreso a la vez</td><td><code>2</code></td><td>Los demás esperan a que se libere un hueco. Más juegos a la vez se ve menos natural. Si lo bajas, se borra el plan de los juegos empezados que se queden sin hueco.</td></tr>
+									<tr><td>Saltar juegos VAC / online</td><td><code>sí / sí</code></td><td>Usa las categorías de la tienda de Steam. Algunos juegos online no las declaran: añádelos a los juegos excluidos.</td></tr>
+									<tr><td>Juegos excluidos</td><td><code>—</code></td><td>Appids que siempre se excluyen.</td></tr>
+									<tr><td>Juegos incluidos siempre</td><td><code>—</code></td><td>Fuerza un juego aunque esté marcado como online o sin datos de tienda, bajo tu responsabilidad. VAC sigue ganando mientras su exclusión esté activa.</td></tr>
 								</tbody>
 							</table>
 						</div>

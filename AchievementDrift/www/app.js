@@ -165,16 +165,18 @@ document.addEventListener("error", (event) => {
 async function loadStatus() {
 	const status = await api(encodeURIComponent(currentBot()));
 
-	document.getElementById("summary").textContent =
-		t("summaryLine", {
-			enabled: t(status.Enabled ? "summaryEnabled" : "summaryDisabled"),
-			dryRun: status.DryRun ? t("summaryDryRun") : "",
+	// El modo va como etiqueta aparte: es lo primero que hay que saber (¿toca Steam o no?)
+	const mode = !status.Enabled ? ["muted", "modeDisabled"] : status.DryRun ? ["info", "modeSimulation"] : ["ok", "modeReal"];
+
+	document.getElementById("summary").innerHTML =
+		`<span class="badge ${mode[0]}">${escapeHtml(t(mode[1]))}</span> ` +
+		escapeHtml(t("summaryLine", {
 			connected: t(status.Connected ? "summaryConnected" : "summaryDisconnected"),
 			hours: status.ActiveHours,
 			zone: status.TimeZone,
 			inside: t(status.InActiveWindow ? "summaryInside" : "summaryOutside"),
 			max: status.MaxActiveGames
-		});
+		}));
 
 	const games = document.getElementById("games");
 
@@ -225,13 +227,21 @@ async function loadConfig() {
 	const config = await api(`${encodeURIComponent(currentBot())}/Config`);
 	const form = document.getElementById("config-form");
 
-	for (const key of ["Enabled", "DryRun", "ExcludeVac", "ExcludeOnline"]) {
+	for (const key of ["Enabled", "ExcludeVac", "ExcludeOnline"]) {
 		form.elements[key].checked = config[key];
 	}
 
-	for (const key of ["MinDays", "MaxDays", "ActiveHours", "MaxActiveGames"]) {
+	form.elements.DryRun.value = String(config.DryRun);
+
+	for (const key of ["MinDays", "MaxDays", "MaxActiveGames"]) {
 		form.elements[key].value = config[key];
 	}
+
+	// ActiveHours se guarda como "10:00-01:00"; en el formulario son dos selectores de hora (siempre HH:mm)
+	const [from = "", to = ""] = config.ActiveHours.split("-").map((value) => value.trim().padStart(5, "0"));
+	form.elements.ActiveFrom.value = from;
+	form.elements.ActiveTo.value = to;
+	updateHoursSummary();
 
 	form.elements.TimeZone.value = config.TimeZone || "";
 	form.elements.Blacklist.value = (config.Blacklist || []).join(", ");
@@ -245,10 +255,10 @@ function readForm() {
 
 	return {
 		Enabled: form.elements.Enabled.checked,
-		DryRun: form.elements.DryRun.checked,
+		DryRun: form.elements.DryRun.value !== "false",
 		MinDays: Number(form.elements.MinDays.value),
 		MaxDays: Number(form.elements.MaxDays.value),
-		ActiveHours: form.elements.ActiveHours.value.trim(),
+		ActiveHours: `${form.elements.ActiveFrom.value}-${form.elements.ActiveTo.value}`,
 		TimeZone: form.elements.TimeZone.value.trim() || null,
 		MaxActiveGames: Number(form.elements.MaxActiveGames.value),
 		ExcludeVac: form.elements.ExcludeVac.checked,
@@ -256,6 +266,37 @@ function readForm() {
 		Blacklist: parseIds(form.elements.Blacklist.value, "Blacklist"),
 		Allowlist: parseIds(form.elements.Allowlist.value, "Allowlist")
 	};
+}
+
+// Explica la franja elegida en palabras: cuántas horas al día y si termina al día siguiente
+function updateHoursSummary() {
+	const form = document.getElementById("config-form");
+	const from = form.elements.ActiveFrom.value;
+	const to = form.elements.ActiveTo.value;
+	const summary = document.getElementById("hours-summary");
+
+	if (!from || !to) {
+		summary.textContent = "";
+
+		return;
+	}
+
+	const minutes = (value) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+	const length = (minutes(to) - minutes(from) + 1440) % 1440;
+
+	if (length === 0) {
+		summary.textContent = t("hoursAllDay");
+
+		return;
+	}
+
+	const hours = Math.floor(length / 60);
+	const rest = length % 60;
+	const duration = rest ? t("hoursAndMinutes", { hours, minutes: rest }) : t("hoursOnly", { hours });
+	// Mismo formato (12 o 24 h) que muestran los selectores, que siguen la configuración del navegador
+	const clock = (value) => new Date(2000, 0, 1, Number(value.slice(0, 2)), Number(value.slice(3, 5))).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+	summary.textContent = t(minutes(to) < minutes(from) ? "hoursNextDay" : "hoursSameDay", { duration, from: clock(from), to: clock(to) });
 }
 
 // readForm puede lanzar (appid inválido): dentro de una función async el error llega al .catch y no se envía nada
@@ -340,6 +381,12 @@ async function init() {
 	for (const button of document.querySelectorAll("nav button")) {
 		button.addEventListener("click", () => selectTab(button.dataset.tab));
 	}
+
+	document.getElementById("config-form").addEventListener("input", (event) => {
+		if (event.target.name === "ActiveFrom" || event.target.name === "ActiveTo") {
+			updateHoursSummary();
+		}
+	});
 
 	document.getElementById("config-form").addEventListener("submit", (event) => {
 		event.preventDefault();

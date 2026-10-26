@@ -45,12 +45,31 @@ main { max-width: 960px; margin: 0 auto; padding: 16px; }
 .card .meta { color: var(--muted); font-size: 13px; }
 .bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 8px 0; }
 .bar > span { display: block; height: 100%; background: var(--ok); }
-form { display: grid; gap: 10px; max-width: 520px; }
-form label { display: grid; gap: 4px; }
-form label:has(input[type=checkbox]) { display: flex; gap: 8px; align-items: center; }
-input[type=text], input[type=number], select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--fg); }
+#summary .badge { margin-right: 6px; font-size: 12.5px; font-weight: 600; }
+form { display: grid; gap: 16px; max-width: 620px; }
+fieldset { display: grid; gap: 14px; margin: 0; padding: 14px 16px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+legend { padding: 0 6px; margin-left: -6px; font-weight: 700; }
+.field { display: grid; gap: 4px; }
+.check { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+.check input { margin-top: 4px; }
+.check > span, .mode > span { display: grid; gap: 2px; }
+.hint { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.range { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.range input { width: 80px; }
+.range input[type=time] { width: auto; min-width: 120px; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mode { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.mode input { margin-top: 4px; }
+.mode:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.mode-real:has(input:checked) { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+input[type=text], input[type=number], input[type=time], select { color-scheme: light dark; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); }
 button[type=submit], #tz-suggestion button { justify-self: start; padding: 8px 16px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
-#tz-suggestion { margin-bottom: 12px; padding: 8px 12px; border: 1px dashed var(--accent); border-radius: 6px; }
+#tz-suggestion { padding: 8px 12px; border: 1px dashed var(--accent); border-radius: 6px; font-size: 13.5px; }
+#tz-suggestion button { margin-left: 8px; padding: 4px 10px; font-size: 13px; }
+
+@media (max-width: 560px) {
+	.modes { grid-template-columns: 1fr; }
+}
 code { font-size: 13px; }
 
 /* Carátulas */

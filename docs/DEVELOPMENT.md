@@ -13,7 +13,7 @@ Dos proyectos .NET (`net10.0`) basados en `JustArchiNET/ASF-PluginTemplate`, con
 
 | Unidad | Responsabilidad | Ubicación |
 |---|---|---|
-| `AchievementDriftPlugin` | Punto de entrada. `IGitHubPluginUpdates`, `IBot`, `IBotCommand2`, `IBotConnection`, `IBotSteamClient`, `IWebInterface`. Solo cablea las demás piezas. | `AchievementDriftPlugin.cs` |
+| `AchievementDriftPlugin` | Punto de entrada. `IGitHubPluginUpdates`, `IBot`, `IBotCommand2`, `IBotConnection`, `IBotSteamClient`, `IWebInterface`, `IWebServiceProvider`. Solo cablea las demás piezas; si el self-test falla no arranca el runtime y retira su controlador de MVC (ver §3). | `AchievementDriftPlugin.cs` |
 | `StatsHandler` | `ClientMsgHandler` de SteamKit2: lee esquema y estado de logros (`ClientGetUserStats`) y desbloquea (`ClientStoreUserStats2`). | `Steam/StatsHandler.cs` |
 | `SchemaParser` | Interpreta el esquema binario (KeyValues): nombre API, nombre visible, bit, protección y dependencias de progreso. | `Steam/SchemaParser.cs` |
 | `WebApis` | Porcentajes globales (`GetGlobalAchievementPercentagesForApp/v2`, sin API key) y datos de tienda (`appdetails`). | `Steam/WebApis.cs` |
@@ -23,15 +23,16 @@ Dos proyectos .NET (`net10.0`) basados en `JustArchiNET/ASF-PluginTemplate`, con
 | `JsonFileStore` | Lectura/escritura JSON atómica en `config/AchievementDrift/`. | `Storage/JsonFileStore.cs` |
 | `SafetyRules` | **Lógica pura.** Decide si un appid es elegible (Blacklist, Allowlist, VAC, online, sin logros, sin datos). | `Core/SafetyRules.cs` |
 | `PlanGenerator` | **Lógica pura.** Crea y amplía planes (presupuesto, orden ponderado, espaciado). | `Core/PlanGenerator.cs` |
-| `ActiveWindow` | **Lógica pura.** Franja `HH:mm-HH:mm` en una zona IANA, con soporte de franjas que cruzan la medianoche. | `Core/ActiveWindow.cs` |
+| `ActiveWindow` | **Lógica pura.** Franja `HH:mm-HH:mm` (puede cruzar la medianoche; inicio = fin es todo el día). Recibe un conversor UTC → hora local en vez de un `TimeZoneInfo`. | `Core/ActiveWindow.cs` |
+| `TimeZones` | Único sitio que nombra `TimeZoneInfo`: busca zonas IANA y crea el conversor de `ActiveWindow`. Si la build no tiene zonas horarias (`Available = false`), usa la hora del sistema y `TimeZone` se rechaza al validar. | `Core/TimeZones.cs` |
 | `DriftEngine` | **Lógica pura.** Un tick: huecos de juegos activos, minutos activos, siguiente desbloqueo. | `Core/DriftEngine.cs` |
-| `StatusBuilder` | Construye el estado (`DriftStatus`) y su formato de texto para `!drift status` y la IPC. | `Core/StatusBuilder.cs` |
+| `StatusBuilder` | Construye el estado (`DriftStatus`) y su formato de texto para `!drift status` y la IPC. Los planes completados se guardan pero no se muestran. | `Core/StatusBuilder.cs` |
 | `BotRunner` | Un temporizador de 1 minuto por bot conectado; orquesta lectura de juegos, motor, creación de planes, desbloqueo y guardado. | `Runtime/BotRunner.cs` |
 | `DriftRuntime` | Registro estático de runners, handlers y almacenes; serializa arranque/parada de runners por bot. | `Runtime/DriftRuntime.cs` |
-| `RuntimeSelfTest` | Al cargar, comprueba que existen los miembros de la BCL que usa el plugin (detecta builds de ASF recortadas). | `Runtime/RuntimeSelfTest.cs` |
-| `DriftCommands` | Comandos `!drift ...` (permiso `Master`). | `Commands/DriftCommands.cs` |
+| `RuntimeSelfTest` | Al cargar, comprueba las APIs de la BCL que usa el plugin. Sin zonas horarias pone `TimeZones.Available = false`; si falta algo imprescindible, marca el plugin como no soportado (`Supported = false`). | `Runtime/RuntimeSelfTest.cs` |
+| `DriftCommands` | Comandos `!drift status\|on\|off [bots]` y `!drift plan\|replan [bots] <appid>`. Resuelve los bots como ASF (`Bot.GetBots`) y comprueba `Master` en cada uno (`Commands.GetProxyAccess`). | `Commands/DriftCommands.cs` |
 | `DriftController` | Endpoints IPC (`ArchiController`). | `IPC/DriftController.cs` |
-| `www/` | Página `/drift/`: estado, configuración y ayuda (HTML/CSS/JS sin dependencias externas). | `www/` |
+| `www/` | Página `/drift/` (HTML/CSS/JS sin dependencias externas): **Estado** con la etiqueta del modo, **Configuración** agrupada (Funcionamiento / Ritmo / Qué juegos, modo Simulación/Real como dos opciones, horario con dos `input type=time`) y **Ayuda**. Textos en `i18n.js`. | `www/` |
 
 El motor es puro y testeable: `DriftEngine.Tick` no toca Steam ni el disco; recibe el estado, la hora, los juegos elegibles en reproducción, los juegos en espera por errores y la configuración, y devuelve qué hay que crear/desbloquear. Los efectos secundarios viven en `BotRunner`.
 
@@ -90,11 +91,35 @@ Hallazgos del código de ASF que condicionan el diseño.
 - `IWebInterface`: `PhysicalPath` relativo a la carpeta del DLL; `WebPath = "/drift"`. ASF registra `UseDefaultFiles` +
   `UseStaticFiles` para esa ruta. Las rutas no-API que dan 404 se re-ejecutan en `/` (ASF-ui), así que la URL correcta es
   **`/drift/`** con barra final.
+- `GET /Api/Plugins` devuelve `WebPath` de los plugins con `IWebInterface` a partir de la versión de ASF posterior a
+  6.3.10.6 ([ArchiSteamFarm#3631](https://github.com/JustArchiNET/ArchiSteamFarm/issues/3631); antes solo daba `Name` y
+  `Version`). ASF-ui lo usa para el enlace «Open web interface» de su página Plugins
+  ([ASF-ui#1771](https://github.com/JustArchiNET/ASF-ui/pull/1771)). El plugin no necesita cambios para eso.
+- La configuración se guarda con **POST** `/Api/Drift/{bot}/Config` (antes PUT): `HttpPutAttribute` no existe en las builds
+  recortadas y su ausencia rompía todo el IPC de ASF (ver §3).
 
 ### Build
 - Target `net10.0`; `Directory.Build.props` de ASF activa `AnalysisMode=AllEnabledByDefault` y
   `TreatWarningsAsErrors` en Release. El código sigue el estilo de ASF (`ConfigureAwait(false)`, cultura invariante).
-- Las builds por SO de ASF (como `linux-x64`) se publican con `PublishTrimmed=true` (`TrimMode=partial`): pueden faltar miembros de la BCL que ASF no usa (`Enumerable.MinBy`, `TimeOnly.IsBetween`, `TimeZoneInfo.FindSystemTimeZoneById`…). Ojo: la imagen publicada en Docker Hub (`justarchi/archisteamfarm`) se construye con `Dockerfile.Service` (single-file, `PublishTrimmed=true`), **no** con `Dockerfile`, así que también está recortada (verificado en producción: faltaban `System.TimeZoneInfo` y `Microsoft.AspNetCore.Mvc.HttpPutAttribute`). Con Docker hay que ejecutar ASF-generic sobre `mcr.microsoft.com/dotnet/aspnet:10.0` (compose de ejemplo en el README).
+- Las builds por SO de ASF (`win-x64`, `linux-x64`…) se publican con `PublishTrimmed=true` (`TrimMode=partial`) y
+  single-file: falta todo lo de la BCL y de ASP.NET que ASF no usa. La imagen de Docker Hub (`justarchi/archisteamfarm`) se
+  construye con `Dockerfile.Service` (también recortada). El plugin **funciona en ellas** desde 1.3.0.0, evitando lo que
+  falta (6.3.10.6: probado en ejecución en win-x64; en linux-x64, con la comparación de referencias descrita abajo):
+
+  | Falta en la build recortada | Se usa en su lugar |
+  |---|---|
+  | `TimeZoneInfo` (el reenvío de `System.Runtime`; el tipo sigue en CoreLib pero el plugin no puede nombrarlo) y `FindSystemTimeZoneById` | `TimeZones` con hora del sistema (`DateTime.ToLocalTime`) |
+  | `Enumerable.MinBy`, `Enumerable.Max(selector long)`, `Enumerable.Sum(IEnumerable<double>)` | `MaxBy` (con clave negada para el mínimo), bucles |
+  | `Math.Clamp(double)` | `Math.Min`/`Math.Max` |
+  | `JsonElement.TryGetProperty`, `JsonProperty.NameEquals` | `EnumerateObject` + `JsonProperty.Name` |
+  | `SemaphoreSlim.WaitAsync(TimeSpan)` | `WaitAsync(int)` |
+  | `HttpPutAttribute`, `ControllerBase.Request`, `IHeaderDictionary.AcceptLanguage` | `HttpPost`, `HttpContext.Request.Headers["Accept-Language"]` |
+
+  Cómo comprobarlo: el `.exe`/binario de ASF es un bundle single-file; se extraen sus ensamblados (cabecera del bundle
+  `.NET` v6, entradas comprimidas con deflate) y se compara cada `TypeRef`/`MemberRef` de `AchievementDrift.dll`, con su
+  firma exacta, contra ellos usando `System.Reflection.Metadata` + `MetadataLoadContext`. Comparar solo nombre y número de
+  parámetros no basta (se escapa, por ejemplo, `Math.Clamp(double)`). Los únicos «faltantes» aceptables son los tipos de
+  zona horaria, que solo se alcanzan con `TimeZones.Available = true`.
 - La plantilla oficial ya apunta el submódulo de ASF a `6.3.10.5`.
 
 ## 3. Decisiones
@@ -112,7 +137,12 @@ Hallazgos del código de ASF que condicionan el diseño.
 - **VAC gana a Allowlist (decisión de la revisión final).** Orden de `SafetyRules.Evaluate`: Blacklist → VAC (si hay datos de tienda, `ExcludeVac` y categoría 8) → Allowlist → sin datos → online → sin logros → elegible. Por eso `NeedsStoreInfo` devuelve `true` para juegos en Allowlist cuando `ExcludeVac` está activado (hay que consultar la tienda para ver el VAC) y `false` solo para juegos en Blacklist o en Allowlist con `ExcludeVac=false`. Un juego en Allowlist sin datos de tienda sigue siendo elegible.
 - **Hueco mínimo por juego entre desbloqueos.** `GamePlan.LastUnlockActiveMinutes` (persistido; `null` = ninguno) guarda los minutos activos del plan en el último desbloqueo real o simulado (`DriftEngine.RecordUnlock`). `FindDue` salta los juegos con `ActiveMinutes - LastUnlockActiveMinutes < PlanGenerator.MinGapMinutes` (15): aunque se acumulen varios logros vencidos (pausas, cambios de horario), un juego no desbloquea en ráfaga. Los logros que Steam ya marca como hechos al sincronizar no cuentan.
 - **Idiomas (inglés/español).** `Core/Texts.cs` contiene todos los textos del backend en dos diccionarios con claves `ETextKey` (un test exige las mismas claves y los mismos huecos `{n}` en ambos). El idioma sale de `CultureInfo.CurrentUICulture`: español si es `es-*`, inglés en cualquier otro caso. Comandos y log usan la cultura de ASF (`CurrentCulture` de `ASF.json`); `DriftController` fija la cultura de cada petición con la cabecera `Accept-Language` que envía el panel (vive en el contexto asíncrono de la petición, no afecta a ASF). `SchemaParser` elige el idioma de nombres/descripciones de logros con la misma cultura, y la caché de la vista de logros va por idioma. El panel tiene su propio catálogo en `www/i18n.js` (selector EN/ES, `data-i18n*` en el HTML, `t()` en JS) y la Ayuda en dos bloques `data-lang`. Se eligió un catálogo en C# en lugar de `.resx` para que la lógica pura siga compilándose directamente en los tests sin generadores.
-- **Detección de builds recortadas.** `RuntimeSelfTest.Run` (desde `OnLoaded`) ejecuta una vez cada API sensible de la BCL dentro de su propia lambda con `try/catch` (el `MissingMethodException` se lanza al compilar con JIT el método que usa el miembro, por eso cada prueba va en un método aparte) y, si alguna falla, registra un error pidiendo la build `generic` (en Docker, ASF-generic sobre la imagen `aspnet` de Microsoft).
+- **Builds recortadas: compatibles y sin romper ASF.** `RuntimeSelfTest.Run` (desde `OnLoaded`) ejecuta cada API sensible dentro de su propia lambda con `try/catch`: el `MissingMethodException`/`TypeLoadException` se lanza al compilar con JIT el método que usa el miembro, así que cada prueba va en un método aparte y **devuelve solo tipos básicos** (si devolviera, por ejemplo, un `TimeZoneInfo`, la instanciación genérica de `Check<T>` haría fallar el JIT del propio `Run`). Hay dos niveles:
+  - Sin zonas horarias: `TimeZones.Available = false` y un aviso en el log. El plugin funciona con la hora del sistema; todo método que nombra `TimeZoneInfo` vive en `TimeZones`, separado y con `NoInlining`, para que el JIT no lo resuelva si no se llama.
+  - Si falta algo imprescindible (red de seguridad ante recortes futuros de ASF): `Supported = false`, error en el log, el runtime no arranca y `!drift` responde con el aviso. Además `OnConfiguringEndpoints` (`IWebServiceProvider`, llamado justo antes de `MapControllers`) quita el ensamblado del plugin de `ApplicationPartManager`: MVC lee los atributos de todos los controladores al arrancar y un tipo ausente tumbaría **todo** el IPC de ASF, no solo la API del plugin.
+- **Juegos sin hueco pierden el plan.** Un hueco solo se libera cuando un juego completa su plan. Si un juego empezado se está jugando pero no consigue hueco (por ejemplo, tras bajar `MaxActiveGames`), `DriftEngine.DropLeftoverPlans` borra su plan después de repartir los huecos (los empezados tienen prioridad); si más adelante consigue hueco, se crea uno nuevo desde Steam. Solo cuenta lo que se está jugando y no está en espera: los planes de juegos que ASF deja de jugar un rato (farmeo de cromos, errores) se conservan.
+- **Comandos para varios bots.** Sin `[bots]` actúan sobre el bot que recibe el comando (como antes). Con `[bots]`, cada bot responde en sus líneas en paralelo (`Utilities.InParallel`) y en `status` la línea del panel se añade una sola vez al final (`StatusBuilder.FormatText(withPanel: false)` + `PanelLine`). En `plan`/`replan` el appid es el último argumento; lo que hay entre el subcomando y él son los bots.
+- **Panel: decisiones de usabilidad.** El modo se muestra como dos opciones (Simulación / Real) en lugar de un checkbox «DryRun» en negativo, y como etiqueta de color al principio de Estado (verde Real, morado Simulación, gris Desactivado). La configuración se agrupa en tres bloques con una línea de ayuda por campo. `MinDays`/`MaxDays` se editan en una sola frase («entre X y Y días») y `ActiveHours` con dos `input type=time` (el formulario los junta en `HH:mm-HH:mm`); una frase calculada explica la franja («15 h al día: de … a … del día siguiente») en el mismo formato de 12/24 h que muestran los selectores. Los campos vacíos no llevan `placeholder` de ejemplo, porque parecían valores ya escritos.
 - **Concurrencia.** Cada `BotRunner` serializa tick, consultas de estado y `replan` con un `SemaphoreSlim`; un tick que no logra el candado en 30 s se omite. `DriftRuntime` serializa `StartAsync`/`StopAsync` por bot (un `SemaphoreSlim` por nombre de bot) para que un logon y una desconexión solapados no dejen un runner huérfano. `BotRunner.DisposeAsync` desecha el temporizador, espera a que termine el tick en curso y marca el runner como desechado: desde entonces no guarda ni hace `replan`, así no pisa el estado que cargue el runner nuevo. No retiene el candado para no colgar consultas de estado que aún tengan una referencia al runner viejo.
 - **Escritura atómica.** `JsonFileStore.SaveAsync` escribe a un temporal con nombre único (`<archivo>.<guid>.tmp`), lo mueve sobre el destino y lo borra si algo falla.
 
@@ -133,6 +163,8 @@ dotnet test AchievementDrift.Tests -c Release --nologo
 En Release el análisis estricto de ASF convierte los warnings en errores; compila en Release antes de publicar.
 
 **Probar contra un ASF local:** la compilación del plugin copia su salida a `ArchiSteamFarm/ArchiSteamFarm/bin/<config>/net10.0/plugins/AchievementDrift/`. Compila también el proyecto `ArchiSteamFarm` (o ejecútalo con `dotnet run`) y arráncalo; el plugin se cargará desde esa carpeta. Empieza siempre con `DryRun = true`.
+
+**Probar en una build recortada:** descarga `ASF-win-x64.zip` o `ASF-linux-x64.zip` del release de ASF, copia el plugin en `plugins/AchievementDrift/` y arráncalo. En el log debe salir el aviso de zonas horarias (es normal) y **no** el error «Your ASF build looks trimmed»; el IPC tiene que responder y `/drift/` funcionar.
 
 **Comprobar el paquete:** `dotnet publish AchievementDrift -c Release -o out/AchievementDrift --nologo`. La carpeta debe contener `AchievementDrift.dll` y `www/`, y **no** `ArchiSteamFarm.dll` ni `SteamKit2.dll` (si aparecen, revisa `IncludeAssets="compile"` / `Private="false"` en el `.csproj`). La carpeta `out/` está en `.gitignore`.
 
