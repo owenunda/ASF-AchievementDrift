@@ -153,10 +153,12 @@ Requieren permiso `Master` y actúan sobre el bot que recibe el comando.
 
 | Comando | Qué hace |
 |---|---|
-| `!drift status` | Progreso por juego, próximo logro y ETA. Termina con la ruta del panel web (`/drift/`). |
-| `!drift on` / `!drift off` | Activa o desactiva el plugin para ese bot (`Enabled`). |
-| `!drift plan <appid>` | Muestra el plan de un juego sin desbloquear nada. |
-| `!drift replan <appid>` | Elimina el plan de un juego; se regenera cuando el juego vuelva a estar activo. |
+| `!drift status [bots]` | Progreso de cada juego en curso, próximo logro y ETA (los juegos completados no se muestran). Termina con la ruta del panel web (`/drift/`). |
+| `!drift on [bots]` / `!drift off [bots]` | Activa o desactiva el plugin para esos bots (`Enabled`). |
+| `!drift plan [bots] <appid>` | Muestra el plan de un juego sin desbloquear nada. |
+| `!drift replan [bots] <appid>` | Elimina el plan de un juego; se regenera cuando el juego vuelva a estar activo. |
+
+Sin `[bots]`, el comando se aplica al bot que lo recibe. Como en los comandos de ASF, `[bots]` acepta nombres de bots separados por comas o `ASF` para todos, por ejemplo `!drift status ASF`: cada bot responde en sus propias líneas.
 
 ## API IPC
 

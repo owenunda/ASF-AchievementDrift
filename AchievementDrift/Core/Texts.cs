@@ -79,7 +79,7 @@ internal enum ETextKey {
 // que ASF fija con CurrentCulture de ASF.json y la IPC con la cabecera Accept-Language de cada petición
 internal static class Texts {
 	internal static readonly FrozenDictionary<ETextKey, string> English = new Dictionary<ETextKey, string> {
-		[ETextKey.CmdUsage] = "Usage: !drift status | on | off | plan <appid> | replan <appid>",
+		[ETextKey.CmdUsage] = "Usage: !drift status | on | off [bots] · !drift plan | replan [bots] <appid>",
 		[ETextKey.CmdBotNotConnected] = "The bot is not connected.",
 		[ETextKey.CmdReplanDone] = "Plan for {0} removed; it will be regenerated when the game is active again.",
 		[ETextKey.CmdEnabled] = "AchievementDrift enabled.",
@@ -149,7 +149,7 @@ internal static class Texts {
 	}.ToFrozenDictionary();
 
 	internal static readonly FrozenDictionary<ETextKey, string> Spanish = new Dictionary<ETextKey, string> {
-		[ETextKey.CmdUsage] = "Uso: !drift status | on | off | plan <appid> | replan <appid>",
+		[ETextKey.CmdUsage] = "Uso: !drift status | on | off [bots] · !drift plan | replan [bots] <appid>",
 		[ETextKey.CmdBotNotConnected] = "El bot no está conectado.",
 		[ETextKey.CmdReplanDone] = "Plan de {0} eliminado; se regenerará cuando el juego vuelva a estar activo.",
 		[ETextKey.CmdEnabled] = "AchievementDrift activado.",

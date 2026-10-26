@@ -11,7 +11,6 @@ internal static class StatusBuilder {
 	internal const string PanelPath = "/drift/";
 
 	internal const string StateActive = "Active";
-	internal const string StateCompleted = "Completed";
 	internal const string StatePaused = "Paused";
 
 	internal static DriftStatus Build(string botName, bool connected, DriftConfig config, ActiveWindow window, BotState state, DateTime nowUtc) {
@@ -20,9 +19,11 @@ internal static class StatusBuilder {
 		ArgumentNullException.ThrowIfNull(window);
 		ArgumentNullException.ThrowIfNull(state);
 
+		// Los planes completados se guardan (para no volver a planificar el juego) pero ya no se muestran
 		List<GameStatus> games = state.Plans.Values
+			.Where(static plan => !plan.IsCompleted)
 			.Select(plan => BuildGame(plan, state.ActiveGames.Contains(plan.AppId), window, nowUtc))
-			.OrderBy(static game => game.State switch { StateActive => 0, StatePaused => 1, _ => 2 })
+			.OrderBy(static game => game.State == StateActive ? 0 : 1)
 			.ThenBy(static game => game.AppId)
 			.ToList();
 
@@ -49,7 +50,8 @@ internal static class StatusBuilder {
 		return text.ToString().TrimEnd();
 	}
 
-	internal static string FormatText(DriftStatus status, CultureInfo? culture = null) {
+	// withPanel = false para respuestas de varios bots: la línea del panel se añade una sola vez al final
+	internal static string FormatText(DriftStatus status, CultureInfo? culture = null, bool withPanel = true) {
 		ArgumentNullException.ThrowIfNull(status);
 
 		StringBuilder text = new();
@@ -67,17 +69,10 @@ internal static class StatusBuilder {
 
 		if (status.Games.Count == 0) {
 			text.AppendLine(Texts.Get(ETextKey.StatusNoPlans, culture));
-			text.Append(Texts.FormatFor(culture, ETextKey.StatusPanel, PanelPath));
-
-			return text.ToString();
 		}
 
 		foreach (GameStatus game in status.Games) {
-			string state = game.State switch {
-				StateActive => "▶️",
-				StatePaused => "⏸️",
-				_ => "🏁"
-			};
+			string state = game.State == StateActive ? "▶️" : "⏸️";
 
 			text.Append(Texts.FormatFor(culture, ETextKey.StatusGame, state, game.Name, game.Done, game.Total, game.ProgressPercent, game.DaysSinceStart));
 
@@ -92,13 +87,19 @@ internal static class StatusBuilder {
 			text.AppendLine();
 		}
 
-		text.Append(Texts.FormatFor(culture, ETextKey.StatusPanel, PanelPath));
+		if (!withPanel) {
+			return text.ToString().TrimEnd();
+		}
+
+		text.Append(PanelLine(culture));
 
 		return text.ToString();
 	}
 
+	internal static string PanelLine(CultureInfo? culture = null) => Texts.FormatFor(culture, ETextKey.StatusPanel, PanelPath);
+
 	private static GameStatus BuildGame(GamePlan plan, bool isActive, ActiveWindow window, DateTime nowUtc) {
-		string state = plan.IsCompleted ? StateCompleted : isActive ? StateActive : StatePaused;
+		string state = isActive ? StateActive : StatePaused;
 		int done = plan.Entries.Count(static e => e.State is EEntryState.Unlocked or EEntryState.Simulated);
 		int skipped = plan.Entries.Count(static e => e.State == EEntryState.Skipped);
 		long planMinutes = plan.PlanMinutes;

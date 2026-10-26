@@ -29,10 +29,11 @@ public sealed class StatusBuilderTests {
 	};
 
 	[TestMethod]
-	public void GamesAreOrderedActivePausedCompleted() {
+	public void GamesAreOrderedActivePausedAndCompletedAreHidden() {
 		DriftStatus status = StatusBuilder.Build("bot", true, new DriftConfig(), AlwaysOn, SampleState(), Now);
 
-		CollectionAssert.AreEqual(new[] { "Active", "Paused", "Completed" }, status.Games.Select(static g => g.State).ToArray());
+		CollectionAssert.AreEqual(new[] { "Active", "Paused" }, status.Games.Select(static g => g.State).ToArray());
+		CollectionAssert.AreEqual(new uint[] { 1, 2 }, status.Games.Select(static g => g.AppId).ToArray());
 	}
 
 	[TestMethod]
@@ -59,13 +60,21 @@ public sealed class StatusBuilderTests {
 	}
 
 	[TestMethod]
-	public void CompletedGameCountsSkipped() {
-		GameStatus game = StatusBuilder.Build("bot", true, new DriftConfig(), AlwaysOn, SampleState(), Now).Games[2];
+	public void SkippedAchievementsCount() {
+		BotState state = new() { Plans = { [4] = Plan(4, 70, (50, EEntryState.Unlocked), (60, EEntryState.Skipped), (90, EEntryState.Pending)) } };
+
+		GameStatus game = StatusBuilder.Build("bot", true, new DriftConfig(), AlwaysOn, state, Now).Games[0];
 
 		Assert.AreEqual(1, game.Done);
 		Assert.AreEqual(1, game.Skipped);
-		Assert.IsNull(game.Next);
-		Assert.AreEqual(100, game.ProgressPercent);
+		Assert.AreEqual("Logro 2", game.Next?.Name);
+	}
+
+	[TestMethod]
+	public void TextHidesCompletedGames() {
+		string text = StatusBuilder.FormatText(StatusBuilder.Build("bot", true, new DriftConfig(), AlwaysOn, SampleState(), Now));
+
+		Assert.IsFalse(text.Contains("Juego 3", StringComparison.Ordinal));
 	}
 
 	[TestMethod]

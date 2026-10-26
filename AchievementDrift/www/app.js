@@ -132,7 +132,7 @@ function escapeHtml(text) {
 	return div.innerHTML;
 }
 
-const STATE_LABEL_KEYS = { Active: "stateActive", Paused: "statePaused", Completed: "stateCompleted" };
+const STATE_LABEL_KEYS = { Active: "stateActive", Paused: "statePaused" };
 
 // Carátula del juego desde el CDN de Steam; si no existe se prueba la ruta antigua y, si tampoco, se muestra un fondo neutro
 const COVER_URLS = [

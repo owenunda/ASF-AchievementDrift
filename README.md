@@ -153,10 +153,12 @@ They require `Master` permission and act on the bot that receives the command.
 
 | Command | What it does |
 |---|---|
-| `!drift status` | Progress per game, next achievement and ETA. Ends with the web panel path (`/drift/`). |
-| `!drift on` / `!drift off` | Enables or disables the plugin for that bot (`Enabled`). |
-| `!drift plan <appid>` | Shows a game's plan without unlocking anything. |
-| `!drift replan <appid>` | Deletes a game's plan; it is regenerated when the game is active again. |
+| `!drift status [bots]` | Progress per game in progress, next achievement and ETA (completed games are not listed). Ends with the web panel path (`/drift/`). |
+| `!drift on [bots]` / `!drift off [bots]` | Enables or disables the plugin for those bots (`Enabled`). |
+| `!drift plan [bots] <appid>` | Shows a game's plan without unlocking anything. |
+| `!drift replan [bots] <appid>` | Deletes a game's plan; it is regenerated when the game is active again. |
+
+Without `[bots]` a command applies to the bot that receives it. Like ASF's own commands, `[bots]` accepts bot names separated by commas or `ASF` for all of them, for example `!drift status ASF`: each bot answers on its own lines.
 
 ## IPC API
 

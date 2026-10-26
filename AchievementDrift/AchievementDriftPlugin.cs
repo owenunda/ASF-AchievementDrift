@@ -35,7 +35,7 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 			return Task.FromResult(isDrift ? Texts.Format(ETextKey.LogTrimmed, RuntimeSelfTest.Missing) : null);
 		}
 
-		return DriftCommands.HandleAsync(bot, access, args);
+		return DriftCommands.HandleAsync(bot, access, args, steamID);
 	}
 
 	public Task OnBotDestroy(Bot bot) => DriftRuntime.UnregisterAsync(bot);
