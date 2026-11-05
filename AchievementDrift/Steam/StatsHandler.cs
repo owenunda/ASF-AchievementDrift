@@ -28,16 +28,18 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 	// Una petición a Steam a la vez por bot: varias "Ver logros" seguidas no llegan a Steam en ráfaga
 	private readonly SemaphoreSlim RequestLock = new(1, 1);
 
+	// Los mensajes llevan siempre el TypeModel precompilado de SteamKit2, como ASF: en las builds recortadas de ASF V7 solo
+	// sobreviven esos constructores y la serialización por reflexión de protobuf-net no está disponible
 	public override void HandleMsg(IPacketMsg packetMsg) {
 		ArgumentNullException.ThrowIfNull(packetMsg);
 
 		switch (packetMsg.MsgType) {
 			case EMsg.ClientGetUserStatsResponse:
-				Client.PostCallback(new GetStatsCallback(packetMsg.TargetJobID, new ClientMsgProtobuf<CMsgClientGetUserStatsResponse>(packetMsg).Body));
+				Client.PostCallback(new GetStatsCallback(packetMsg.TargetJobID, new ClientMsgProtobuf<CMsgClientGetUserStatsResponse>(packetMsg, SteamKitProtobuf.Model).Body));
 
 				break;
 			case EMsg.ClientStoreUserStatsResponse:
-				Client.PostCallback(new StoreStatsCallback(packetMsg.TargetJobID, new ClientMsgProtobuf<CMsgClientStoreUserStatsResponse>(packetMsg).Body));
+				Client.PostCallback(new StoreStatsCallback(packetMsg.TargetJobID, new ClientMsgProtobuf<CMsgClientStoreUserStatsResponse>(packetMsg, SteamKitProtobuf.Model).Body));
 
 				break;
 			default:
@@ -74,7 +76,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 			return null;
 		}
 
-		ClientMsgProtobuf<CMsgClientGetUserStats> request = new(EMsg.ClientGetUserStats) {
+		ClientMsgProtobuf<CMsgClientGetUserStats> request = new(EMsg.ClientGetUserStats, SteamKitProtobuf.Model) {
 			SourceJobID = Client.GetNextJobID(),
 			Body = {
 				game_id = appId,
@@ -148,7 +150,7 @@ internal sealed class StatsHandler(Bot bot) : ClientMsgHandler {
 			return null;
 		}
 
-		ClientMsgProtobuf<CMsgClientStoreUserStats2> request = new(EMsg.ClientStoreUserStats2) {
+		ClientMsgProtobuf<CMsgClientStoreUserStats2> request = new(EMsg.ClientStoreUserStats2, SteamKitProtobuf.Model) {
 			SourceJobID = Client.GetNextJobID(),
 			Body = {
 				game_id = appId,

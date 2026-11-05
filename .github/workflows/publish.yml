@@ -6,7 +6,11 @@ env:
   CONFIGURATION: Release
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_NOLOGO: true
-  DOTNET_SDK_VERSION: 10.0
+  DOTNET_SDK_VERSION: 11.0
+  # ASF V7 broke the plugin API: every release carries a {PluginName}-V7.zip built from this commit and a {PluginName}-V6.zip
+  # built from the last V6 source (with the version of this commit), so ASF picks the right one and switches when it updates
+  DOTNET_SDK_VERSION_V6: 10.0
+  V6_SOURCE_REF: 1.4.0.0
   GPG_PRIVATE_KEY: ${{ secrets.ARCHIBOT_GPG_PRIVATE_KEY }} # Optional, if secret not provided, will skip signing SHA512SUMS with GPG key. You can specify your own credentials if you'd like to, simply change ARCHIBOT_GPG_PRIVATE_KEY here to the one you want to use
 
 permissions:
@@ -76,19 +80,19 @@ jobs:
                 if command -v zip >/dev/null; then
                     (
                         cd "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}"
-                        zip -q -r $zip_args "../../${PLUGIN_NAME}.zip" .
+                        zip -q -r $zip_args "../../${PLUGIN_NAME}-V7.zip" .
                     )
                 else
-                    7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
+                    7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}-V7.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
                 fi
                 ;;
             *)
                 if command -v 7z >/dev/null; then
-                    7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
+                    7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}-V7.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
                 else
                     (
                         cd "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}"
-                        zip -q -r $zip_args "../../${PLUGIN_NAME}.zip" .
+                        zip -q -r $zip_args "../../${PLUGIN_NAME}-V7.zip" .
                     )
                 fi
                 ;;
@@ -122,7 +126,7 @@ jobs:
         }
 
         # Create the final zip file
-        7z a -bd -slp -tzip -mm=Deflate $compressionArgs "out\$env:PLUGIN_NAME.zip" "$env:GITHUB_WORKSPACE\out\plugin\$env:PLUGIN_NAME\*"
+        7z a -bd -slp -tzip -mm=Deflate $compressionArgs "out\$env:PLUGIN_NAME-V7.zip" "$env:GITHUB_WORKSPACE\out\plugin\$env:PLUGIN_NAME\*"
 
         if ($LastExitCode -ne 0) {
             throw "Last command failed."
@@ -134,11 +138,80 @@ jobs:
         compression-level: 1
         if-no-files-found: error
         name: ${{ matrix.os }}_${{ steps.plugin-name.outputs.info }}
-        path: out/${{ steps.plugin-name.outputs.info }}.zip
+        path: out/${{ steps.plugin-name.outputs.info }}-V7.zip
+
+  publish-v6:
+    runs-on: ubuntu-latest
+
+    outputs:
+      PLUGIN_NAME: ${{ steps.plugin-name.outputs.info }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        show-progress: false
+
+    - name: Checkout V6 source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: v6
+        ref: ${{ env.V6_SOURCE_REF }}
+        show-progress: false
+        submodules: recursive
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: ${{ env.DOTNET_SDK_VERSION_V6 }}
+
+    - name: Parse plugin name from Directory.Build.props
+      id: plugin-name
+      uses: mavrosxristoforos/get-xml-info@219e509082288b248df8a825f6c9abb323ef4e06 # 2.2.1
+      with:
+        xml-file: 'Directory.Build.props'
+        xpath: '//PluginName'
+
+    - name: Parse plugin version from Directory.Build.props
+      id: plugin-version
+      uses: mavrosxristoforos/get-xml-info@219e509082288b248df8a825f6c9abb323ef4e06 # 2.2.1
+      with:
+        xml-file: 'Directory.Build.props'
+        xpath: '//Version'
+
+    - name: Publish V6 plugin
+      env:
+        PLUGIN_NAME: ${{ steps.plugin-name.outputs.info }}
+        PLUGIN_VERSION: ${{ steps.plugin-version.outputs.info }}
+      shell: sh
+      run: |
+        set -eu
+
+        # The SDK 10 must build the V6 source: pin it there so a newer preinstalled SDK is not picked up
+        printf '{ "sdk": { "version": "%s.100", "rollForward": "latestFeature" } }' "$DOTNET_SDK_VERSION_V6" > v6/global.json
+
+        # Same version as this release, otherwise ASF V6 would keep seeing a newer version and reinstall it every day
+        (
+            cd v6
+            dotnet publish "$PLUGIN_NAME" -c "$CONFIGURATION" -o "../out/plugin-v6/${PLUGIN_NAME}" -p:Version="$PLUGIN_VERSION" -p:ContinuousIntegrationBuild=true -p:TargetLatestRuntimePatch=false -p:UseAppHost=false --nologo
+        )
+
+        (
+            cd "out/plugin-v6/${PLUGIN_NAME}"
+            zip -q -r -9 "../../${PLUGIN_NAME}-V6.zip" .
+        )
+
+    - name: Upload V6 plugin artifact
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        compression-level: 1
+        if-no-files-found: error
+        name: V6_${{ steps.plugin-name.outputs.info }}
+        path: out/${{ steps.plugin-name.outputs.info }}-V6.zip
 
   release:
     if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/') }}
-    needs: publish
+    needs: [publish, publish-v6]
     runs-on: ubuntu-latest
 
     permissions:
@@ -154,6 +227,12 @@ jobs:
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         name: ubuntu-latest_${{ needs.publish.outputs.PLUGIN_NAME }}
+        path: out
+
+    - name: Download V6 plugin artifact
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: V6_${{ needs.publish-v6.outputs.PLUGIN_NAME }}
         path: out
 
     - name: Import GPG key for signing

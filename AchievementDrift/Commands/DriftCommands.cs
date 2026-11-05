@@ -14,7 +14,7 @@ namespace AchievementDrift.Commands;
 // !drift status|on|off [bots] y !drift plan|replan [bots] <appid>. Sin bots se usa el bot que recibe el comando;
 // con bots (ASF, nombres separados por comas…) responde cada uno en su línea, como los comandos de ASF.
 internal static class DriftCommands {
-	internal static async Task<string?> HandleAsync(Bot bot, EAccess access, string[] args, ulong steamID = 0) {
+	internal static async Task<string?> HandleAsync(Bot bot, EBotUserAccess access, string[] args, ulong steamID = 0) {
 		ArgumentNullException.ThrowIfNull(bot);
 		ArgumentNullException.ThrowIfNull(args);
 
@@ -29,25 +29,25 @@ internal static class DriftCommands {
 		uint appId = 0;
 
 		if (needsAppId && ((args.Length < 3) || !uint.TryParse(args[^1], NumberStyles.None, CultureInfo.InvariantCulture, out appId) || (appId == 0))) {
-			return access >= EAccess.Master ? bot.Commands.FormatBotResponse(Texts.Get(ETextKey.CmdUsage)) : null;
+			return access >= EBotUserAccess.Master ? bot.Commands.FormatBotResponse(Texts.Get(ETextKey.CmdUsage)) : null;
 		}
 
 		int botArgs = args.Length - 2 - (needsAppId ? 1 : 0);
 
 		if (botArgs <= 0) {
-			return access >= EAccess.Master ? bot.Commands.FormatBotResponse(await RespondAsync(bot, subcommand, appId, true).ConfigureAwait(false)) : null;
+			return access >= EBotUserAccess.Master ? bot.Commands.FormatBotResponse(await RespondAsync(bot, subcommand, appId, true).ConfigureAwait(false)) : null;
 		}
 
 		string botNames = string.Join(",", args.Skip(2).Take(botArgs));
 		HashSet<Bot>? bots = Bot.GetBots(botNames);
 
 		if ((bots == null) || (bots.Count == 0)) {
-			return access >= EAccess.Owner ? AsfCommands.FormatStaticResponse(Texts.Format(ETextKey.ApiBotNotFound, botNames)) : null;
+			return access >= EBotUserAccess.Owner ? AsfCommands.FormatStaticResponse(Texts.Format(ETextKey.ApiBotNotFound, botNames)) : null;
 		}
 
 		IList<string?> responses = await Utilities.InParallel(
 			bots.OrderBy(static target => target.BotName, StringComparer.OrdinalIgnoreCase).Select(
-				async target => AsfCommands.GetProxyAccess(target, access, steamID) >= EAccess.Master ? target.Commands.FormatBotResponse(await RespondAsync(target, subcommand, appId, false).ConfigureAwait(false)) : null
+				async target => AsfCommands.GetProxyAccess(target, access, steamID) >= EBotUserAccess.Master ? target.Commands.FormatBotResponse(await RespondAsync(target, subcommand, appId, false).ConfigureAwait(false)) : null
 			)
 		).ConfigureAwait(false);
 

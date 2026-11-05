@@ -2,6 +2,7 @@ using AchievementDrift.Core;
 using System;
 using System.Globalization;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using AchievementDrift.Commands;
 using AchievementDrift.Runtime;
@@ -19,7 +20,7 @@ namespace AchievementDrift;
 
 #pragma warning disable CA1812 // ASF uses this class during runtime
 [UsedImplicitly]
-internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotCommand2, IBotConnection, IBotSteamClient, IWebInterface, IWebServiceProvider {
+internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotCommand, IBotConnection, IBotSteamClient, IWebInterface, IWebServiceProvider {
 	internal const string PluginName = "AchievementDrift";
 
 	public string Name => PluginName;
@@ -28,9 +29,9 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 	public Version Version => typeof(AchievementDriftPlugin).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
 	public string WebPath => "/drift";
 
-	public Task<string?> OnBotCommand(Bot bot, EAccess access, string message, string[] args, ulong steamID = 0) {
+	public Task<string?> OnBotCommand(Bot bot, EBotUserAccess access, string message, string[] args, ulong steamID = 0, CancellationToken cancellationToken = default) {
 		if (!RuntimeSelfTest.Supported) {
-			bool isDrift = (args.Length > 0) && args[0].Equals("drift", StringComparison.OrdinalIgnoreCase) && (access >= EAccess.Master);
+			bool isDrift = (args.Length > 0) && args[0].Equals("drift", StringComparison.OrdinalIgnoreCase) && (access >= EBotUserAccess.Master);
 
 			return Task.FromResult(isDrift ? Texts.Format(ETextKey.LogTrimmed, RuntimeSelfTest.Missing) : null);
 		}
@@ -38,18 +39,18 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 		return DriftCommands.HandleAsync(bot, access, args, steamID);
 	}
 
-	public Task OnBotDestroy(Bot bot) => DriftRuntime.UnregisterAsync(bot);
+	public Task OnBotDestroy(Bot bot, CancellationToken cancellationToken = default) => DriftRuntime.UnregisterAsync(bot);
 
-	public Task OnBotDisconnected(Bot bot, EResult reason) => DriftRuntime.StopAsync(bot);
+	public Task OnBotDisconnected(Bot bot, EResult reason, CancellationToken cancellationToken = default) => DriftRuntime.StopAsync(bot);
 
-	public Task OnBotInit(Bot bot) => Task.CompletedTask;
+	public Task OnBotInit(Bot bot, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
 	// Si a la build le falta algo que el plugin necesita (ver RuntimeSelfTest), el runtime fallaría: mejor no arrancarlo
-	public Task OnBotLoggedOn(Bot bot) => RuntimeSelfTest.Supported ? DriftRuntime.StartAsync(bot) : Task.CompletedTask;
+	public Task OnBotLoggedOn(Bot bot, CancellationToken cancellationToken = default) => RuntimeSelfTest.Supported ? DriftRuntime.StartAsync(bot) : Task.CompletedTask;
 
-	public Task OnBotSteamCallbacksInit(Bot bot, CallbackManager callbackManager) => Task.CompletedTask;
+	public Task OnBotSteamCallbacksInit(Bot bot, CallbackManager callbackManager, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-	public Task<IReadOnlyCollection<ClientMsgHandler>?> OnBotSteamHandlersInit(Bot bot) {
+	public Task<IReadOnlyCollection<ClientMsgHandler>?> OnBotSteamHandlersInit(Bot bot, CancellationToken cancellationToken = default) {
 		ArgumentNullException.ThrowIfNull(bot);
 
 		StatsHandler handler = new(bot);
@@ -58,7 +59,7 @@ internal sealed class AchievementDriftPlugin : IGitHubPluginUpdates, IBot, IBotC
 		return Task.FromResult<IReadOnlyCollection<ClientMsgHandler>?>([handler]);
 	}
 
-	public Task OnLoaded() {
+	public Task OnLoaded(CancellationToken cancellationToken = default) {
 		// ASF ya aplicó su CurrentCulture: será el idioma del log, aunque luego lleguen peticiones del panel en otro idioma
 		Texts.LogCulture = CultureInfo.CurrentUICulture;
 

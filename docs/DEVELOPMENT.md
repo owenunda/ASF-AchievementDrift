@@ -4,7 +4,7 @@ Guía para quien quiera entender, modificar o publicar el plugin. La documentaci
 
 ## 1. Arquitectura
 
-Dos proyectos .NET (`net10.0`) basados en `JustArchiNET/ASF-PluginTemplate`, con ASF como submódulo git y central package management:
+Dos proyectos .NET (`net11.0`, ASF V7) basados en `JustArchiNET/ASF-PluginTemplate`, con ASF como submódulo git y central package management. El código para ASF V6 (`net10.0`) quedó congelado en el tag `1.4.0.0` (ver §3, «ASF V7»):
 
 - `AchievementDrift`: el plugin (una DLL con la web estática en `www/`).
 - `AchievementDrift.Tests`: tests MSTest (sin Steam ni ASF en ejecución).
@@ -48,7 +48,7 @@ El motor es puro y testeable: `DriftEngine.Tick` no toca Steam ni el disco; reci
 
 Todos los mensajes del log llevan el prefijo `[AchievementDrift]` (y `[AchievementDrift][DryRun]` las simulaciones).
 
-## 2. Notas técnicas de ASF 6.3.10.5 (verificadas en el código fuente)
+## 2. Notas técnicas de ASF (verificadas en el código fuente de 6.3.10.5 y 7.0.0.5)
 
 Hallazgos del código de ASF que condicionan el diseño.
 
@@ -72,6 +72,9 @@ Hallazgos del código de ASF que condicionan el diseño.
 - Escribir: `EMsg.ClientStoreUserStats2` (`CMsgClientStoreUserStats2 { game_id, settor_steam_id, settee_steam_id,
   crc_stats, explicit_reset = false, stats }`) → `EMsg.ClientStoreUserStatsResponse` (`eresult`).
 - Esperar respuestas con `new AsyncJob<T>(client, jobId).ToLongRunningTask()` (`ArchiSteamFarm.Core.Utilities`).
+- En ASF V7 (SteamKit2 4.0) los mensajes se construyen **con el `TypeModel` precompilado**: `new ClientMsgProtobuf<T>(EMsg, SteamKitProtobuf.Model)`
+  y `new ClientMsgProtobuf<T>(packetMsg, SteamKitProtobuf.Model)`, igual que ASF. Las builds recortadas de V7 solo conservan
+  esos constructores; los antiguos (sin modelo) dan `MissingMethodException` al leer o desbloquear logros.
 
 ### Almacenamiento
 - Las actualizaciones de plugins (`Utilities.UpdateFromArchive`) mueven los archivos de la carpeta del plugin a un backup:
@@ -99,7 +102,7 @@ Hallazgos del código de ASF que condicionan el diseño.
   recortadas y su ausencia rompía todo el IPC de ASF (ver §3).
 
 ### Build
-- Target `net10.0`; `Directory.Build.props` de ASF activa `AnalysisMode=AllEnabledByDefault` y
+- Target `net11.0` (ASF V7); `Directory.Build.props` de ASF activa `AnalysisMode=AllEnabledByDefault` y
   `TreatWarningsAsErrors` en Release. El código sigue el estilo de ASF (`ConfigureAwait(false)`, cultura invariante).
 - Las builds por SO de ASF (`win-x64`, `linux-x64`…) se publican con `PublishTrimmed=true` (`TrimMode=partial`) y
   single-file: falta todo lo de la BCL y de ASP.NET que ASF no usa. La imagen de Docker Hub (`justarchi/archisteamfarm`) se
@@ -120,7 +123,11 @@ Hallazgos del código de ASF que condicionan el diseño.
   firma exacta, contra ellos usando `System.Reflection.Metadata` + `MetadataLoadContext`. Comparar solo nombre y número de
   parámetros no basta (se escapa, por ejemplo, `Math.Clamp(double)`). Los únicos «faltantes» aceptables son los tipos de
   zona horaria, que solo se alcanzan con `TimeZones.Available = true`.
-- La plantilla oficial ya apunta el submódulo de ASF a `6.3.10.5`.
+- En V7 (7.0.0.5, win-x64) la comparación añade dos «faltantes» que no lo son si se usa el modelo: los constructores de
+  `ClientMsgProtobuf<T>` sin `TypeModel` (ver «Desbloqueo de logros»). Aparte de las zonas horarias no debe quedar nada.
+  Como esto solo se ve al hablar con Steam, `RuntimeSelfTest` también construye, serializa y vuelve a leer los mensajes de
+  logros al cargar: si fallan en alguna build, el plugin se desactiva con el error de build recortada en vez de fallar en
+  cada desbloqueo (comprobado en win-x64 7.0.0.5 con un contraejemplo que usa los constructores antiguos).
 
 ## 3. Decisiones
 
@@ -131,6 +138,7 @@ Hallazgos del código de ASF que condicionan el diseño.
 - **Logros desbloqueados fuera del plugin** se marcan `Unlocked` al sincronizar el plan con Steam (justo antes de cada desbloqueo real). Los logros nuevos del juego se añaden al final del plan con presupuesto proporcional.
 - **Un fallo de Steam al desbloquear** (rechazo) marca la entrada `Skipped`. Los `EResult` transitorios (`Busy`, `ServiceUnavailable`, `Timeout`, `RateLimitExceeded`, `TryAnotherCM`, `NoConnection`) y los errores de red/timeout no la saltan: `StatsHandler.UnlockAsync` devuelve `null` y se reintenta (ver siguiente punto). `Fail` y el resto cuentan como rechazo.
 - **Errores aislados por juego en cada tick (espera por juego).** Una excepción al evaluar un juego se registra y lo trata como no elegible en ese tick. Si falla la creación del plan o el camino de desbloqueo (`GetAsync`/`UnlockAsync` sin respuesta o con excepción), `BotRunner` pone el juego **en espera 30 minutos** (`RetryDelay`) y pasa ese conjunto a `DriftEngine.Tick`: un juego en espera libera su hueco (su plan queda en pausa, sin sumar minutos) y nunca se devuelve como desbloqueo, así un juego atascado no bloquea a los demás. Tras 5 fallos seguidos del mismo logro, este se marca `Skipped` con un aviso. Si no se pueden obtener los porcentajes globales al crear un plan, se reintenta (con espera) hasta 3 veces; al tercer fallo seguido se crea el plan con `NaN` (50 % vía `NormalizePercent`, spec §3.1). Los contadores y esperas viven solo en memoria (se reinician con el runner o con `replan`). Una excepción no controlada del tick se registra y el temporizador sigue.
+- **ASF V7: un zip por versión mayor de ASF.** ASF 7.0 cambió la API de plugins (`CancellationToken` en todos los métodos, `IBotCommand2` → `IBotCommand`, `EAccess` → `EBotUserAccess`, .NET 11, SteamKit2 4.0), así que un mismo DLL no sirve para V6 y V7. Cada release lleva `AchievementDrift-V6.zip` y `AchievementDrift-V7.zip`; `IGitHubPluginUpdates.FindPossibleMatch` elige `{Nombre}-V{Major}.zip` según la versión de ASF y, al actualizarse ASF de 6 a 7, cambia al zip de V7 de la **misma** versión del plugin (lo permite si el release tiene 2+ zips). **No publicar nunca un release con un solo zip**: ASF usa el único zip que haya sin mirar la versión, y un DLL de V7 rompería a los usuarios de V6 (y al revés). El código de V6 quedó congelado en el tag `1.4.0.0`: los arreglos nuevos solo van a V7. El zip de V6 se compila con la versión del release (`-p:Version`); si llevara la versión vieja, ASF V6 vería siempre una versión «nueva» y lo reinstalaría cada día. Cuando ya nadie use V6, se puede quitar el job `publish-v6` (y entonces el único zip podría volver a llamarse `AchievementDrift.zip`).
 - **Datos en `config/AchievementDrift/`:** `<bot>.config.json`, `<bot>.state.json` y `store-cache.json` (compartido por todos los bots). Nunca en la carpeta del plugin.
 - **`DriftController` resuelve el bot desde el registro de ASF antes de tocar archivos.** `FindBot` obtiene el bot con `Bot.GetBot` y devuelve la instancia del registro interno (`Bot.BotsReadOnly`), de modo que el nombre que llega a las rutas de archivo nunca deriva directamente del texto de la petición (regla CA3003, path injection).
 - **Exclusiones adicionales a las del spec.** `SafetyRules` también excluye juegos sin datos de tienda y juegos sin la categoría de logros (id 22), salvo que estén en `Allowlist`.
@@ -148,7 +156,7 @@ Hallazgos del código de ASF que condicionan el diseño.
 
 ## 4. Desarrollo local
 
-Requisitos: **.NET 10 SDK** y git.
+Requisitos: **.NET 11 SDK** y git (para tocar el código de V6, el tag `1.4.0.0` con el **.NET 10 SDK**).
 
 ```bash
 git clone --recursive https://github.com/owenunda/ASF-AchievementDrift.git
@@ -162,7 +170,7 @@ dotnet test AchievementDrift.Tests -c Release --nologo
 
 En Release el análisis estricto de ASF convierte los warnings en errores; compila en Release antes de publicar.
 
-**Probar contra un ASF local:** la compilación del plugin copia su salida a `ArchiSteamFarm/ArchiSteamFarm/bin/<config>/net10.0/plugins/AchievementDrift/`. Compila también el proyecto `ArchiSteamFarm` (o ejecútalo con `dotnet run`) y arráncalo; el plugin se cargará desde esa carpeta. Empieza siempre con `DryRun = true`.
+**Probar contra un ASF local:** la compilación del plugin copia su salida a `ArchiSteamFarm/ArchiSteamFarm/bin/<config>/net11.0/plugins/AchievementDrift/`. Compila también el proyecto `ArchiSteamFarm` (o ejecútalo con `dotnet run`) y arráncalo; el plugin se cargará desde esa carpeta. Empieza siempre con `DryRun = true`.
 
 **Probar en una build recortada:** descarga `ASF-win-x64.zip` o `ASF-linux-x64.zip` del release de ASF, copia el plugin en `plugins/AchievementDrift/` y arráncalo. En el log debe salir el aviso de zonas horarias (es normal) y **no** el error «Your ASF build looks trimmed»; el IPC tiene que responder y `/drift/` funcionar.
 
@@ -174,7 +182,7 @@ En Release el análisis estricto de ASF convierte los warnings en errores; compi
 2. `git push` a `main`.
 3. El workflow `.github/workflows/auto-release.yml` detecta el cambio en `Directory.Build.props`. Si todavía no existe un tag con ese número, lo crea (`X.Y.Z.W`) y lanza `.github/workflows/publish.yml` sobre él (con `workflow_dispatch`, porque los tags creados con `GITHUB_TOKEN` no disparan otros workflows). Si el tag ya existe, no hace nada.
    - Sigue funcionando el camino manual: crear y subir tú el tag (`git tag -a X.Y.Z.W -m ...` + `git push origin X.Y.Z.W`) dispara `publish.yml` directamente.
-4. `publish.yml` compila, genera `AchievementDrift.zip` y crea el release usando `.github/RELEASE_TEMPLATE.md` como cuerpo. Lo publica directamente como **estable** y lo marca como **«latest»** (`prerelease: false`, `makeLatest: true`), así que aparece como la última versión en GitHub y ASF (canal `Stable`, que consulta `/releases/latest`) lo ve de inmediato.
+4. `publish.yml` genera **dos zips**: `AchievementDrift-V7.zip` (este commit, .NET 11) y `AchievementDrift-V6.zip` (el código V6 del tag `V6_SOURCE_REF` = `1.4.0.0`, .NET 10, compilado con la versión de este commit, ver §3), y crea el release usando `.github/RELEASE_TEMPLATE.md` como cuerpo. Lo publica directamente como **estable** y lo marca como **«latest»** (`prerelease: false`, `makeLatest: true`), así que aparece como la última versión en GitHub y ASF (canal `Stable`, que consulta `/releases/latest`) lo ve de inmediato.
    - Por eso, **prueba antes de subir la versión**: instala el resultado de `dotnet publish` en un ASF de prueba (con `DryRun = true`) y comprueba que carga y funciona.
    - Si quieres publicar una versión de prueba, edita el release en GitHub y marca «Set as a pre-release»: solo la verán las instancias de ASF con `UpdateChannel` = `PreRelease`.
 5. Elegir el número de versión es manual a propósito: publicar en cada push generaría un release por cada cambio pequeño.

@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using ArchiSteamFarm.Core;
+using SteamKit2;
+using SteamKit2.Internal;
 
 namespace AchievementDrift.Runtime;
 
@@ -52,6 +54,7 @@ internal static class RuntimeSelfTest {
 
 			return builder.ToImmutable().Count;
 		});
+		Check(missing, "SteamKit2 stats messages", static () => RoundTripStatsMessages());
 
 		if (missing.Count == 0) {
 			return true;
@@ -73,6 +76,47 @@ internal static class RuntimeSelfTest {
 		} catch (Exception e) {
 			missing.Add($"{name} ({e.GetType().Name})");
 		}
+	}
+
+	// Mismo camino que StatsHandler, sin Steam: construye y serializa las peticiones de logros y vuelve a leer una respuesta.
+	// En las builds recortadas de ASF V7 solo sobrevive la serialización con el TypeModel precompilado de SteamKit2
+	private static uint RoundTripStatsMessages() {
+		ClientMsgProtobuf<CMsgClientGetUserStats> getRequest = new(EMsg.ClientGetUserStats, SteamKitProtobuf.Model) {
+			Body = {
+				game_id = 440,
+				steam_id_for_user = 76561197960287930
+			}
+		};
+
+		ClientMsgProtobuf<CMsgClientStoreUserStats2> storeRequest = new(EMsg.ClientStoreUserStats2, SteamKitProtobuf.Model) {
+			Body = {
+				game_id = 440,
+				crc_stats = 7
+			}
+		};
+
+		storeRequest.Body.stats.Add(new CMsgClientStoreUserStats2.Stats { stat_id = 1, stat_value = 2 });
+
+		ClientMsgProtobuf<CMsgClientGetUserStatsResponse> response = new(EMsg.ClientGetUserStatsResponse, SteamKitProtobuf.Model) {
+			Body = {
+				game_id = 440,
+				crc_stats = 7
+			}
+		};
+
+		response.Body.stats.Add(new CMsgClientGetUserStatsResponse.Stats { stat_id = 1, stat_value = 2 });
+
+		if ((getRequest.Serialize().Length == 0) || (storeRequest.Serialize().Length == 0)) {
+			throw new InvalidOperationException(nameof(RoundTripStatsMessages));
+		}
+
+		ClientMsgProtobuf<CMsgClientGetUserStatsResponse> parsed = new(new PacketClientMsgProtobuf(EMsg.ClientGetUserStatsResponse, response.Serialize()), SteamKitProtobuf.Model);
+
+		if ((parsed.Body.crc_stats != 7) || (parsed.Body.stats.Count != 1) || (parsed.Body.stats[0].stat_value != 2)) {
+			throw new InvalidOperationException(nameof(RoundTripStatsMessages));
+		}
+
+		return parsed.Body.crc_stats;
 	}
 
 	private static int SumJsonIds(string json) {

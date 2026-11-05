@@ -64,13 +64,13 @@ If Steam fails for a game (no response, a temporary error, or its plan cannot be
 
 ## Requirements
 
-- ASF **6.3.10.5** or later.
+- ASF **7.x** (recommended) or **6.3.10.5** and later 6.x versions. ASF 7 changed the plugin API, so each release has one zip per ASF version (see [Installation](#installation)).
 - Works with the ASF **`generic`** build and with the OS-specific builds (`win-x64`, `linux-x64`…). The OS-specific builds are published trimmed and have no time zone database: there `ActiveHours` follow the system time zone and the `TimeZone` setting is not available (the plugin logs a warning on load). If you need `TimeZone`, use the `generic` build. **The official Docker image (`justarchi/archisteamfarm`) is trimmed too**, and containers usually run in UTC, so with Docker run ASF-generic on Microsoft's .NET image (see [Docker](#docker)).
 - The bot must be idling hours, usually with `GamesPlayedWhileIdle` (or farming cards).
 
 ## Installation
 
-1. Download `AchievementDrift.zip` from the [latest release](https://github.com/owenunda/ASF-AchievementDrift/releases/latest).
+1. Download the zip for your ASF version from the [latest release](https://github.com/owenunda/ASF-AchievementDrift/releases/latest): `AchievementDrift-V7.zip` for ASF 7.x, `AchievementDrift-V6.zip` for ASF 6.x. Your ASF version is shown at the bottom of the ASF panel and in the first line of the log.
 2. Extract its contents into `plugins/AchievementDrift/` inside your ASF folder.
 3. Restart ASF.
 4. Check the log for the line `AchievementDrift ... loaded` and that the plugin shows up in the **Plugins** tab of the ASF panel.
@@ -82,7 +82,7 @@ The official image is trimmed (no `TimeZone`, see [Requirements](#requirements))
 ```yaml
 services:
   asf:
-    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    image: mcr.microsoft.com/dotnet/aspnet:11.0
     restart: unless-stopped
     user: "1000:1000"
     working_dir: /asf
@@ -101,6 +101,7 @@ services:
 
 - The plugin goes in `./asf/plugins/AchievementDrift/` (next to the official plugins that come with ASF-generic).
 - ASF updates itself in `./asf`: after an update it exits (`--no-restart`) and Docker starts it again.
+- ASF 7 needs .NET 11 (`aspnet:11.0`); ASF 6 runs on `aspnet:10.0`. **Before ASF updates itself from 6 to 7**, switch the image to `aspnet:11.0` and add `DOTNET_ROLL_FORWARD=Major` to `environment`: it lets ASF 6 keep running on .NET 11 until the update, so the container doesn't break when the new version arrives. You can remove it once you're on ASF 7.
 - For the IPC to listen inside the container, `config/IPC.config` must bind `http://*:1242`.
 - Containers usually run in **UTC**: set `TimeZone` to your zone (the `/drift/` panel detects your browser's zone and offers to use it); otherwise the active hours are applied in UTC.
 
